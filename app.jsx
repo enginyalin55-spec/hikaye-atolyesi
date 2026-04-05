@@ -112,8 +112,18 @@ function buildAudioSource(bytes, sampleRate) {
 }
 
 async function playAudio(bytes, sampleRate) {
-  const { promise } = buildAudioSource(bytes, sampleRate);
-  return promise;
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  await audioCtx.resume();
+  const int16 = new Int16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 2);
+  const float32 = new Float32Array(int16.length);
+  for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768;
+  const buffer = audioCtx.createBuffer(1, float32.length, sampleRate);
+  buffer.getChannelData(0).set(float32);
+  const source = audioCtx.createBufferSource();
+  source.buffer = buffer;
+  source.connect(audioCtx.destination);
+  source.start();
+  return new Promise(resolve => { source.onended = resolve; });
 }
 // ═══════════════════════════════════════════
 // HİKAYE ÜRETİM FONKSİYONU
