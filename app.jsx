@@ -95,8 +95,17 @@ async function generateTTS(text, voice, speed, rawText = false) {
   return { bytes, sampleRate };
 }
 
+let sharedAudioCtx = null;
+
+function getAudioContext() {
+  if (!sharedAudioCtx || sharedAudioCtx.state === "closed") {
+    sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  return sharedAudioCtx;
+}
+
 function buildAudioSource(bytes, sampleRate) {
-  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  const audioCtx = getAudioContext();
   const int16 = new Int16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 2);
   const float32 = new Float32Array(int16.length);
   for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768;
@@ -105,25 +114,15 @@ function buildAudioSource(bytes, sampleRate) {
   const source = audioCtx.createBufferSource();
   source.buffer = buffer;
   source.connect(audioCtx.destination);
-  source.start();
+  audioCtx.resume().then(() => source.start());
   const promise = new Promise(resolve => { source.onended = resolve; });
-  const stop = () => { try { source.stop(); audioCtx.close(); } catch {} };
+  const stop = () => { try { source.stop(); } catch {} };
   return { promise, stop };
 }
 
 async function playAudio(bytes, sampleRate) {
-  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  await audioCtx.resume();
-  const int16 = new Int16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 2);
-  const float32 = new Float32Array(int16.length);
-  for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768;
-  const buffer = audioCtx.createBuffer(1, float32.length, sampleRate);
-  buffer.getChannelData(0).set(float32);
-  const source = audioCtx.createBufferSource();
-  source.buffer = buffer;
-  source.connect(audioCtx.destination);
-  source.start();
-  return new Promise(resolve => { source.onended = resolve; });
+  const { promise } = buildAudioSource(bytes, sampleRate);
+  return promise;
 }
 // ═══════════════════════════════════════════
 // HİKAYE ÜRETİM FONKSİYONU
