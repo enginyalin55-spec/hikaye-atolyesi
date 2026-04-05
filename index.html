@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Hikaye Atölyesi</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+  <style>
+    * { font-family: 'Plus Jakarta Sans', sans-serif; }
+    @keyframes fade-in { from { opacity:0; transform:translateY(12px);} to { opacity:1; transform:translateY(0);} }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .animate-fade-in { animation: fade-in 0.5s ease-out forwards; }
+    .spinner { animation: spin 1s linear infinite; }
+    input[type='range']::-webkit-slider-thumb {
+      -webkit-appearance: none; height: 26px; width: 26px; border-radius: 10px;
+      background: #4f46e5; cursor: pointer; border: 3px solid white;
+      box-shadow: 0 4px 10px rgba(79,70,229,0.3);
+    }
+    .match-card { transition: all 0.2s; cursor: pointer; }
+    .match-card.selected { border-color: #4f46e5; background: #eef2ff; }
+    .match-card.correct { border-color: #10b981; background: #d1fae5; }
+    .match-card.wrong { border-color: #ef4444; background: #fee2e2; }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen">
+  <div id="root"></div>
+  <script type="text/babel" src="app.jsx"></script>
+</body>
+</html>
