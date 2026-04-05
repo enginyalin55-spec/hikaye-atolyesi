@@ -95,28 +95,38 @@ async function generateTTS(text, voice, speed, rawText = false) {
   return { bytes, sampleRate };
 }
 
-let sharedAudioCtx = null;
-
-function getAudioContext() {
-  if (!sharedAudioCtx || sharedAudioCtx.state === "closed") {
-    sharedAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-  }
-  return sharedAudioCtx;
+function pcmToWav(bytes, sampleRate) {
+  const wavBuffer = new ArrayBuffer(44 + bytes.byteLength);
+  const view = new DataView(wavBuffer);
+  const write = (o, s) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
+  write(0, "RIFF");
+  view.setUint32(4, 36 + bytes.byteLength, true);
+  write(8, "WAVE");
+  write(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  write(36, "data");
+  view.setUint32(40, bytes.byteLength, true);
+  new Uint8Array(wavBuffer, 44).set(bytes);
+  return wavBuffer;
 }
 
 function buildAudioSource(bytes, sampleRate) {
-  const audioCtx = getAudioContext();
-  const int16 = new Int16Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 2);
-  const float32 = new Float32Array(int16.length);
-  for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / 32768;
-  const buffer = audioCtx.createBuffer(1, float32.length, sampleRate);
-  buffer.getChannelData(0).set(float32);
-  const source = audioCtx.createBufferSource();
-  source.buffer = buffer;
-  source.connect(audioCtx.destination);
-  audioCtx.resume().then(() => source.start());
-  const promise = new Promise(resolve => { source.onended = resolve; });
-  const stop = () => { try { source.stop(); } catch {} };
+  const wav = pcmToWav(bytes, sampleRate);
+  const blob = new Blob([wav], { type: "audio/wav" });
+  const url = URL.createObjectURL(blob);
+  const audio = new Audio(url);
+  const promise = new Promise((resolve) => {
+    audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
+    audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+    audio.play().catch(() => resolve());
+  });
+  const stop = () => { audio.pause(); audio.currentTime = 0; URL.revokeObjectURL(url); };
   return { promise, stop };
 }
 
