@@ -5,6 +5,33 @@ const GEMINI_URL = "/api/proxy";
 const IMAGEN_URL = "/api/proxy";
 const TTS_URL    = "/api/proxy";
 
+// ── Supabase Yardımcıları ──────────────────
+async function supabaseSave(payload) {
+  const res = await fetch("/api/proxy", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model: "supabase-save", payload }),
+  });
+  if (!res.ok) throw new Error("Kayıt hatası: " + res.status);
+  return res.json();
+}
+
+async function supabaseGet(kod) {
+  const res = await fetch("/api/proxy", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model: "supabase-get", payload: { kod } }),
+  });
+  if (!res.ok) throw new Error("Hikaye bulunamadı.");
+  return res.json();
+}
+
+function generateKod() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let kod = "HK-";
+  for (let i = 0; i < 4; i++) kod += chars[Math.floor(Math.random() * chars.length)];
+  return kod;
+}
 const VOICES = [
   { value: "Kore",   label: "Kore — Kadın, Dengeli" },
   { value: "Zephyr", label: "Zephyr — Kadın, Sıcak"  },
@@ -224,6 +251,12 @@ function App() {
   const [imageProgress, setImageProgress] = useState({ current: 0, total: 0 });
   const [error, setError]       = useState(null);
   const [library, setLibrary]   = useState([]);
+  const [kodInput, setKodInput] = useState("");
+  const [kodLoading, setKodLoading] = useState(false);
+  const [kodError, setKodError] = useState(null);
+  const [shareStatus, setShareStatus] = useState("idle"); // idle | preparing | done
+  const [shareKod, setShareKod] = useState(null);
+  const [isStudentMode, setIsStudentMode] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem("hikaye_kutuphanesi");
@@ -300,6 +333,67 @@ function App() {
     setVoice(entry.voice || "Kore");
     setSpeed(entry.speed || "normal");
     setStatus("preview");
+    setIsStudentMode(false);
+  };
+
+  // ── Kod ile hikaye aç (öğrenci) ──
+  const handleKodGir = async () => {
+    if (!kodInput.trim()) return;
+    setKodLoading(true);
+    setKodError(null);
+    try {
+      const entry = await supabaseGet(kodInput.trim());
+      setStoryData(entry.data);
+      setLevel(entry.level);
+      setLang(entry.lang);
+      setVoice(entry.voice || "Kore");
+      setSpeed(entry.speed || "normal");
+      setIsStudentMode(true);
+      setStatus("preview");
+    } catch (err) {
+      setKodError("Geçersiz kod. Lütfen tekrar deneyin.");
+    }
+    setKodLoading(false);
+  };
+
+  // ── Paylaşıma hazırla ──
+  const handleShare = async () => {
+    if (!storyData) return;
+    setShareStatus("preparing");
+    try {
+      // Tüm sayfa seslerini üret
+      const pages = [...storyData.pages];
+      for (let i = 0; i < pages.length; i++) {
+        try {
+          const { bytes, sampleRate } = await generateTTS(pages[i].text, voice, speed);
+          const wav = pcmToWav(bytes, sampleRate);
+          const b64 = btoa(String.fromCharCode(...new Uint8Array(wav)));
+          pages[i] = { ...pages[i], audioB64: b64, audioSampleRate: sampleRate };
+        } catch {
+          // ses üretilemezse devam et
+        }
+      }
+
+      const kod = generateKod();
+      const id  = crypto.randomUUID();
+
+      await supabaseSave({
+        id,
+        kod,
+        title: storyData.title,
+        level,
+        lang,
+        voice,
+        speed,
+        data: { ...storyData, pages }
+      });
+
+      setShareKod(kod);
+      setShareStatus("done");
+    } catch (err) {
+      alert("Paylaşım hatası: " + err.message);
+      setShareStatus("idle");
+    }
   };
 
   return (
@@ -315,7 +409,7 @@ function App() {
             📚 AI Hikaye Atölyesi
           </button>
           <div className="flex gap-2">
-            {status === "preview" && (
+            {status === "preview" && !isStudentMode && (
               <button
                 onClick={handleSave}
                 className="bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold text-sm"
@@ -323,12 +417,23 @@ function App() {
                 💾 Kaydet
               </button>
             )}
-            <button
-              onClick={() => setStatus("library")}
-              className="bg-indigo-100 text-indigo-700 px-4 py-2 rounded-xl font-bold text-sm"
-            >
-              🗂️ Kütüphane {library.length > 0 && `(${library.length})`}
-            </button>
+            {status === "preview" && !isStudentMode && (
+              <button
+                onClick={handleShare}
+                disabled={shareStatus === "preparing"}
+                className="bg-orange-500 text-white px-4 py-2 rounded-xl font-bold text-sm disabled:opacity-50"
+              >
+                {shareStatus === "preparing" ? "⏳ Hazırlanıyor..." : "📤 Paylaş"}
+              </button>
+            )}
+            {!isStudentMode && (
+              <button
+                onClick={() => setStatus("library")}
+                className="bg-indigo-100 text-indigo-700 px-4 py-2 rounded-xl font-bold text-sm"
+              >
+                🗂️ Kütüphane {library.length > 0 && `(${library.length})`}
+              </button>
+            )}
           </div>
         </div>
       </nav>
@@ -469,6 +574,33 @@ function App() {
               >
                 ✨ Hikayeyi Oluştur
               </button>
+
+              {/* Kod ile aç */}
+              <div className="border-t border-gray-100 pt-6 space-y-3">
+                <label className="text-xs font-black text-orange-400 uppercase tracking-widest block">
+                  🎓 Öğrenci Girişi
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Hikaye kodu (örn: HK-4821)"
+                    value={kodInput}
+                    onChange={e => { setKodInput(e.target.value.toUpperCase()); setKodError(null); }}
+                    onKeyDown={e => e.key === "Enter" && handleKodGir()}
+                    className="flex-1 p-3 border-2 border-gray-100 rounded-2xl bg-gray-50 focus:bg-white focus:border-orange-400 outline-none font-bold text-sm"
+                  />
+                  <button
+                    onClick={handleKodGir}
+                    disabled={kodLoading || !kodInput.trim()}
+                    className="bg-orange-500 text-white px-4 py-3 rounded-2xl font-black text-sm disabled:opacity-50"
+                  >
+                    {kodLoading ? "⏳" : "Gir"}
+                  </button>
+                </div>
+                {kodError && (
+                  <p className="text-red-500 text-xs font-bold">{kodError}</p>
+                )}
+              </div>
             </div>
           </div>
         )}
@@ -565,26 +697,63 @@ function App() {
                 </p>
               </div>
               <div className="flex gap-2 flex-wrap">
+                {!isStudentMode && (
+                  <button
+                    onClick={handleSave}
+                    className="bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold text-sm"
+                  >
+                    💾 Kaydet
+                  </button>
+                )}
+                {!isStudentMode && (
+                  <button
+                    onClick={handleShare}
+                    disabled={shareStatus === "preparing"}
+                    className="bg-orange-500 text-white px-4 py-2 rounded-xl font-bold text-sm disabled:opacity-50"
+                  >
+                    {shareStatus === "preparing" ? "⏳ Hazırlanıyor..." : "📤 Paylaş"}
+                  </button>
+                )}
+                {!isStudentMode && (
+                  <button
+                    onClick={() => handleDownload(storyData, level, lang)}
+                    className="bg-violet-600 text-white px-4 py-2 rounded-xl font-bold text-sm"
+                  >
+                    ⬇️ İndir
+                  </button>
+                )}
                 <button
-                  onClick={handleSave}
-                  className="bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold text-sm"
-                >
-                  💾 Kaydet
-                </button>
-                <button
-                  onClick={() => handleDownload(storyData, level, lang)}
-                  className="bg-violet-600 text-white px-4 py-2 rounded-xl font-bold text-sm"
-                >
-                  ⬇️ İndir
-                </button>
-                <button
-                  onClick={() => setStatus("idle")}
+                  onClick={() => { setStatus("idle"); setIsStudentMode(false); setShareStatus("idle"); setShareKod(null); }}
                   className="bg-gray-100 text-gray-600 px-4 py-2 rounded-xl font-bold text-sm"
                 >
-                  🔄 Yeni
+                  {isStudentMode ? "← Geri" : "🔄 Yeni"}
                 </button>
               </div>
             </div>
+
+            {/* Paylaşım kodu göster */}
+            {shareStatus === "done" && shareKod && (
+              <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-5 flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-xs font-black text-orange-400 uppercase tracking-widest mb-1">
+                    📤 Paylaşım Kodu
+                  </p>
+                  <p className="text-3xl font-black text-orange-600 tracking-widest">{shareKod}</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Bu kodu öğrencilerine gönder. Site: hikaye-atolyesi.vercel.app
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(shareKod);
+                    alert("Kod kopyalandı!");
+                  }}
+                  className="bg-orange-500 text-white px-4 py-3 rounded-xl font-black text-sm"
+                >
+                  📋 Kopyala
+                </button>
+              </div>
+            )}
 
             {/* Sayfalar */}
             {storyData.pages.map((page, i) => (
@@ -596,6 +765,7 @@ function App() {
                 speed={speed}
                 level={level}
                 lang={lang}
+                isStudentMode={isStudentMode}
               />
             ))}
 
@@ -633,9 +803,9 @@ function App() {
 // SAYFA KARTI BİLEŞENİ
 // ═══════════════════════════════════════════
 
-function PageCard({ page, index, voice, speed, level, lang }) {
-  const [audioState, setAudioState] = useState("idle"); // idle | loading | playing
-  const [wordAudioState, setWordAudioState] = useState({}); // { word: "idle|loading|playing" }
+function PageCard({ page, index, voice, speed, level, lang, isStudentMode }) {
+  const [audioState, setAudioState] = useState("idle");
+  const [wordAudioState, setWordAudioState] = useState({});
   const [showVocab, setShowVocab] = useState(false);
   const stopAudioRef = useRef(null);
 
@@ -648,6 +818,19 @@ function PageCard({ page, index, voice, speed, level, lang }) {
     }
     setAudioState("loading");
     try {
+      // Öğrenci modunda gömülü ses varsa onu kullan
+      if (isStudentMode && page.audioB64) {
+        const binary = atob(page.audioB64);
+        const bytes  = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        setAudioState("playing");
+        const { promise, stop } = buildAudioSource(bytes, page.audioSampleRate || 24000);
+        stopAudioRef.current = stop;
+        await promise;
+        setAudioState("idle");
+        return;
+      }
+      // Normal mod: TTS üret
       const { bytes, sampleRate } = await generateTTS(page.text, voice, speed);
       setAudioState("playing");
       const { promise, stop } = buildAudioSource(bytes, sampleRate);

@@ -1,14 +1,64 @@
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
+const GEMINI_KEY   = process.env.GEMINI_KEY;
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const GEMINI_KEY = process.env.GEMINI_KEY;
+  const { model, payload } = req.body;
+
+  // ── Supabase: Hikaye Kaydet ──────────────
+  if (model === "supabase-save") {
+    try {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/paylasilan_hikayeler`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_KEY,
+          "Authorization": `Bearer ${SUPABASE_KEY}`,
+          "Prefer": "return=minimal"
+        },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        const err = await response.text();
+        return res.status(response.status).json({ error: err });
+      }
+      return res.status(200).json({ ok: true });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── Supabase: Hikaye Getir ───────────────
+  if (model === "supabase-get") {
+    try {
+      const kod = payload.kod?.toUpperCase();
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/paylasilan_hikayeler?kod=eq.${kod}&select=*`,
+        {
+          headers: {
+            "apikey": SUPABASE_KEY,
+            "Authorization": `Bearer ${SUPABASE_KEY}`
+          }
+        }
+      );
+      const data = await response.json();
+      if (!data || data.length === 0) {
+        return res.status(404).json({ error: "Hikaye bulunamadı." });
+      }
+      return res.status(200).json(data[0]);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── Gemini API ───────────────────────────
   if (!GEMINI_KEY) {
     return res.status(500).json({ error: "API key tanımlı değil" });
   }
-
-  const { model, payload } = req.body;
 
   const modelUrls = {
     "gemini": `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
@@ -27,7 +77,6 @@ export default async function handler(req, res) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-
     const data = await response.json();
     return res.status(response.status).json(data);
   } catch (err) {
