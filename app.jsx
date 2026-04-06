@@ -398,6 +398,22 @@ function App() {
           // ses üretilemezse devam et
         }
 
+        // Kelime seslerini üret
+        const vocabWithAudio = [];
+        for (const v of (pages[i].vocabulary || [])) {
+          try {
+            const { bytes: wb, sampleRate: ws } = await generateTTS(v.word, voice, "slow");
+            const wav2 = pcmToWav(wb, ws);
+            const arr2 = new Uint8Array(wav2);
+            let bin2 = "";
+            for (let j = 0; j < arr2.byteLength; j++) bin2 += String.fromCharCode(arr2[j]);
+            vocabWithAudio.push({ ...v, audioB64: btoa(bin2), audioSampleRate: ws });
+          } catch {
+            vocabWithAudio.push(v);
+          }
+        }
+        pages[i] = { ...pages[i], vocabulary: vocabWithAudio };
+
         // Görseli Storage'a yükle
         try {
           if (pages[i].imageUrl && pages[i].imageUrl.startsWith("data:")) {
@@ -1003,6 +1019,32 @@ function PageCard({ page, index, voice, speed, level, lang, isStudentMode }) {
       setAudioState("idle");
     }
     setWordAudioState(prev => ({ ...prev, [word]: "loading" }));
+    // Öğrenci modunda gömülü ses varsa onu kullan
+    if (isStudentMode) {
+      const vocabItem = page.vocabulary?.find(v => v.word === word);
+      if (vocabItem?.audioB64) {
+        setWordAudioState(prev => ({ ...prev, [word]: "playing" }));
+        try {
+          const binary = atob(vocabItem.audioB64);
+          const bytes  = new Uint8Array(binary.length);
+          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+          const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          await audioCtx.resume();
+          const audioBuffer = await audioCtx.decodeAudioData(bytes.buffer.slice(0));
+          const source = audioCtx.createBufferSource();
+          source.buffer = audioBuffer;
+          source.connect(audioCtx.destination);
+          await new Promise(resolve => {
+            source.onended = () => { audioCtx.close(); resolve(); };
+            source.start(0);
+          });
+        } catch {
+          await speakWordFallback(word);
+        }
+        setWordAudioState(prev => ({ ...prev, [word]: "idle" }));
+        return;
+      }
+    }
     try {
       const { bytes, sampleRate } = await generateTTS(`"${word}" kelimesini söyle: ${word}.`, voice, "slow", true);
       setWordAudioState(prev => ({ ...prev, [word]: "playing" }));
