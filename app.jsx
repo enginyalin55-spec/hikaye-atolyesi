@@ -1,6 +1,7 @@
 // ═══════════════════════════════════════════
 // API AYARLARI — kendi Gemini key'ini buraya yaz
 // ═══════════════════════════════════════════
+const OGRETMEN_SIFRE = "Yalin.Yasemin1113";
 const GEMINI_URL = "/api/proxy";
 const IMAGEN_URL = "/api/proxy";
 const TTS_URL    = "/api/proxy";
@@ -257,6 +258,9 @@ function App() {
   const [shareStatus, setShareStatus] = useState("idle"); // idle | preparing | done
   const [shareKod, setShareKod] = useState(null);
   const [isStudentMode, setIsStudentMode] = useState(false);
+  const [girisEkrani, setGirisEkrani] = useState(true);
+  const [girisInput, setGirisInput] = useState("");
+  const [girisHata, setGirisHata] = useState(null);
 
   useEffect(() => {
     const saved = localStorage.getItem("hikaye_kutuphanesi");
@@ -398,6 +402,81 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-gray-800 pb-20">
+      {/* GİRİŞ EKRANI */}
+      {girisEkrani && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm space-y-6">
+            <div className="text-center">
+              <p className="text-4xl mb-3">📚</p>
+              <h1 className="text-2xl font-black text-gray-900">AI Hikaye Atölyesi</h1>
+              <p className="text-gray-400 text-sm mt-1">Nasıl devam etmek istersiniz?</p>
+            </div>
+
+            {/* Öğrenci girişi */}
+            <div className="space-y-2">
+              <label className="text-xs font-black text-orange-400 uppercase tracking-widest block">
+                🎓 Öğrenci Girişi
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Hikaye kodu (HK-XXXX)"
+                  value={kodInput}
+                  onChange={e => { setKodInput(e.target.value.toUpperCase()); setKodError(null); }}
+                  onKeyDown={e => e.key === "Enter" && handleKodGir()}
+                  className="flex-1 p-3 border-2 border-gray-100 rounded-2xl bg-gray-50 focus:bg-white focus:border-orange-400 outline-none font-bold text-sm"
+                />
+                <button
+                  onClick={async () => { await handleKodGir(); if (!kodError) setGirisEkrani(false); }}
+                  disabled={kodLoading || !kodInput.trim()}
+                  className="bg-orange-500 text-white px-4 py-3 rounded-2xl font-black text-sm disabled:opacity-50"
+                >
+                  {kodLoading ? "⏳" : "Gir"}
+                </button>
+              </div>
+              {kodError && <p className="text-red-500 text-xs font-bold">{kodError}</p>}
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-gray-100" />
+              <span className="text-xs text-gray-400 font-bold">VEYA</span>
+              <div className="flex-1 h-px bg-gray-100" />
+            </div>
+
+            {/* Öğretmen girişi */}
+            <div className="space-y-2">
+              <label className="text-xs font-black text-indigo-400 uppercase tracking-widest block">
+                👩‍🏫 Öğretmen Girişi
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  placeholder="Şifre"
+                  value={girisInput}
+                  onChange={e => { setGirisInput(e.target.value); setGirisHata(null); }}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") {
+                      if (girisInput === OGRETMEN_SIFRE) { setGirisEkrani(false); setIsStudentMode(false); }
+                      else setGirisHata("Şifre yanlış!");
+                    }
+                  }}
+                  className="flex-1 p-3 border-2 border-gray-100 rounded-2xl bg-gray-50 focus:bg-white focus:border-indigo-400 outline-none font-bold text-sm"
+                />
+                <button
+                  onClick={() => {
+                    if (girisInput === OGRETMEN_SIFRE) { setGirisEkrani(false); setIsStudentMode(false); }
+                    else setGirisHata("Şifre yanlış!");
+                  }}
+                  className="bg-indigo-600 text-white px-4 py-3 rounded-2xl font-black text-sm"
+                >
+                  Gir
+                </button>
+              </div>
+              {girisHata && <p className="text-red-500 text-xs font-bold">{girisHata}</p>}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* NAV */}
       <nav className="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-gray-100 px-4 py-3">
