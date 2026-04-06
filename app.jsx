@@ -6,6 +6,20 @@ const GEMINI_URL = "/api/proxy";
 const IMAGEN_URL = "/api/proxy";
 const TTS_URL    = "/api/proxy";
 
+async function supabaseUploadImage(base64Data, fileName) {
+  const res = await fetch("/api/proxy", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "supabase-upload",
+      payload: { fileName, base64Data, mimeType: "image/png" }
+    }),
+  });
+  if (!res.ok) throw new Error("Görsel yükleme hatası: " + res.status);
+  const data = await res.json();
+  return data.url;
+}
+
 // ── Supabase Yardımcıları ──────────────────
 async function supabaseSave(payload) {
   const res = await fetch("/api/proxy", {
@@ -365,44 +379,49 @@ function App() {
     if (!storyData) return;
     setShareStatus("preparing");
     try {
-      // Tüm sayfa seslerini üret
       const pages = [...storyData.pages];
+      const id  = crypto.randomUUID();
+
       for (let i = 0; i < pages.length; i++) {
+        // Ses üret
         try {
           const { bytes, sampleRate } = await generateTTS(pages[i].text, voice, speed);
           const wav = pcmToWav(bytes, sampleRate);
-const wavArr = new Uint8Array(wav);
-let b64 = "";
-const chunkSize = 8192;
-for (let j = 0; j < wavArr.length; j += chunkSize) {
-  b64 += String.fromCharCode(...wavArr.subarray(j, j + chunkSize));
-}
-b64 = btoa(b64);
-pages[i] = { ...pages[i], audioB64: b64, audioSampleRate: sampleRate, audioIsWav: true };
+          const wavArr = new Uint8Array(wav);
+          let binary = "";
+          for (let j = 0; j < wavArr.byteLength; j++) {
+            binary += String.fromCharCode(wavArr[j]);
+          }
+          const b64 = btoa(binary);
+          pages[i] = { ...pages[i], audioB64: b64, audioSampleRate: sampleRate };
         } catch {
           // ses üretilemezse devam et
+        }
+
+        // Görseli Storage'a yükle
+        try {
+          if (pages[i].imageUrl && pages[i].imageUrl.startsWith("data:")) {
+            const fileName = `${id}_sayfa${i}.png`;
+            const storageUrl = await supabaseUploadImage(pages[i].imageUrl, fileName);
+            pages[i] = { ...pages[i], imageUrl: storageUrl };
+          }
+        } catch {
+          pages[i] = { ...pages[i], imageUrl: null };
         }
       }
 
       const kod = generateKod();
-      const id  = crypto.randomUUID();
 
-      // Görselleri çıkar, sadece sesleri kaydet
-const pagesForSave = pages.map(p => ({
-  ...p,
-  imageUrl: null, // görseli kaydetme, çok büyük
-}));
-
-await supabaseSave({
-  id,
-  kod,
-  title: storyData.title,
-  level,
-  lang,
-  voice,
-  speed,
-  data: { ...storyData, pages: pagesForSave }
-});
+      await supabaseSave({
+        id,
+        kod,
+        title: storyData.title,
+        level,
+        lang,
+        voice,
+        speed,
+        data: { ...storyData, pages }
+      });
 
       setShareKod(kod);
       setShareStatus("done");

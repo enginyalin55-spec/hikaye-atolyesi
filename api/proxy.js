@@ -9,6 +9,39 @@ export default async function handler(req, res) {
 
   const { model, payload } = req.body;
 
+  // ── Supabase: Görsel Yükle ───────────────
+  if (model === "supabase-upload") {
+    try {
+      const { fileName, base64Data, mimeType } = payload;
+      const binary = atob(base64Data.split(",")[1] || base64Data);
+      const bytes  = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+      const response = await fetch(
+        `${SUPABASE_URL}/storage/v1/object/hikaye-gorseller/${fileName}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": mimeType || "image/png",
+            "apikey": SUPABASE_KEY,
+            "Authorization": `Bearer ${SUPABASE_KEY}`,
+          },
+          body: bytes,
+        }
+      );
+
+      if (!response.ok) {
+        const err = await response.text();
+        return res.status(response.status).json({ error: err });
+      }
+
+      const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/hikaye-gorseller/${fileName}`;
+      return res.status(200).json({ url: publicUrl });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   // ── Supabase: Hikaye Kaydet ──────────────
   if (model === "supabase-save") {
     try {
