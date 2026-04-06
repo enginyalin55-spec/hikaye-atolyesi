@@ -371,8 +371,14 @@ function App() {
         try {
           const { bytes, sampleRate } = await generateTTS(pages[i].text, voice, speed);
           const wav = pcmToWav(bytes, sampleRate);
-          const b64 = btoa(String.fromCharCode(...new Uint8Array(wav)));
-          pages[i] = { ...pages[i], audioB64: b64, audioSampleRate: sampleRate };
+const wavArr = new Uint8Array(wav);
+let b64 = "";
+const chunkSize = 8192;
+for (let j = 0; j < wavArr.length; j += chunkSize) {
+  b64 += String.fromCharCode(...wavArr.subarray(j, j + chunkSize));
+}
+b64 = btoa(b64);
+pages[i] = { ...pages[i], audioB64: b64, audioSampleRate: sampleRate, audioIsWav: true };
         } catch {
           // ses üretilemezse devam et
         }
@@ -899,11 +905,23 @@ function PageCard({ page, index, voice, speed, level, lang, isStudentMode }) {
     try {
       // Öğrenci modunda gömülü ses varsa onu kullan
       if (isStudentMode && page.audioB64) {
-        const binary = atob(page.audioB64);
-        const bytes  = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        setAudioState("playing");
-        const { promise, stop } = buildAudioSource(bytes, page.audioSampleRate || 24000);
+  const binary = atob(page.audioB64);
+  const bytes  = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  setAudioState("playing");
+  const blob = new Blob([bytes], { type: "audio/wav" });
+  const url  = URL.createObjectURL(blob);
+  const audio = new Audio(url);
+  const promise = new Promise(resolve => {
+    audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
+    audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+    audio.play().catch(() => resolve());
+  });
+  const stop = () => { audio.pause(); URL.revokeObjectURL(url); };
+  stopAudioRef.current = stop;
+  await promise;
+  setAudioState("idle");
+  return;
         stopAudioRef.current = stop;
         await promise;
         setAudioState("idle");
