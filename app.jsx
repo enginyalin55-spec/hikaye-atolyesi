@@ -387,16 +387,22 @@ pages[i] = { ...pages[i], audioB64: b64, audioSampleRate: sampleRate, audioIsWav
       const kod = generateKod();
       const id  = crypto.randomUUID();
 
-      await supabaseSave({
-        id,
-        kod,
-        title: storyData.title,
-        level,
-        lang,
-        voice,
-        speed,
-        data: { ...storyData, pages }
-      });
+      // Görselleri çıkar, sadece sesleri kaydet
+const pagesForSave = pages.map(p => ({
+  ...p,
+  imageUrl: null, // görseli kaydetme, çok büyük
+}));
+
+await supabaseSave({
+  id,
+  kod,
+  title: storyData.title,
+  level,
+  lang,
+  voice,
+  speed,
+  data: { ...storyData, pages: pagesForSave }
+});
 
       setShareKod(kod);
       setShareStatus("done");
