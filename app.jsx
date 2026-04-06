@@ -930,27 +930,46 @@ function PageCard({ page, index, voice, speed, level, lang, isStudentMode }) {
     try {
       // Öğrenci modunda gömülü ses varsa onu kullan
       if (isStudentMode && page.audioB64) {
-  const binary = atob(page.audioB64);
-  const bytes  = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   setAudioState("playing");
-  const blob = new Blob([bytes], { type: "audio/wav" });
-  const url  = URL.createObjectURL(blob);
-  const audio = new Audio(url);
-  const promise = new Promise(resolve => {
-    audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
-    audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
-    audio.play().catch(() => resolve());
-  });
-  const stop = () => { audio.pause(); URL.revokeObjectURL(url); };
-  stopAudioRef.current = stop;
-  await promise;
+  try {
+    const binary = atob(page.audioB64);
+    const bytes  = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    await audioCtx.resume();
+    
+    const wavBuffer = bytes.buffer;
+    const audioBuffer = await audioCtx.decodeAudioData(wavBuffer.slice(0));
+    
+    const source = audioCtx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(audioCtx.destination);
+    
+    await new Promise(resolve => {
+      source.onended = () => { audioCtx.close(); resolve(); };
+      stopAudioRef.current = () => { 
+        try { source.stop(); audioCtx.close(); } catch {} 
+      };
+      source.start(0);
+    });
+  } catch(err) {
+    // fallback: blob dene
+    const binary = atob(page.audioB64);
+    const bytes  = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type: "audio/wav" });
+    const url  = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    await new Promise(resolve => {
+      audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
+      audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+      audio.play().catch(() => resolve());
+    });
+    stopAudioRef.current = () => { audio.pause(); URL.revokeObjectURL(url); };
+  }
   setAudioState("idle");
   return;
-        stopAudioRef.current = stop;
-        await promise;
-        setAudioState("idle");
-        return;
       }
       // Normal mod: TTS üret
       const { bytes, sampleRate } = await generateTTS(page.text, voice, speed);
