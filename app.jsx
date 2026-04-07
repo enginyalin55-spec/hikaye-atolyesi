@@ -420,19 +420,25 @@ function App() {
         setShareProgress(`📖 Sayfa ${i+1}/${pages.length} kelimeleri seslendiriliyor...`);
         const vocabWithAudio = [];
         for (const v of (pages[i].vocabulary || [])) {
-          try {
-            const { bytes: wb, sampleRate: ws } = await generateTTS(v.word, voice, "slow");
-            const wav2 = pcmToWav(wb, ws);
-            const arr2 = new Uint8Array(wav2);
-            let bin2 = "";
-            for (let j = 0; j < arr2.byteLength; j++) bin2 += String.fromCharCode(arr2[j]);
-            const wordB64 = btoa(bin2);
-            const wordFileName = `${id}_sayfa${i}_kelime${vocabWithAudio.length}.wav`;
-            const wordAudioUrl = await supabaseUploadAudio(wordB64, wordFileName);
-            vocabWithAudio.push({ ...v, audioUrl: wordAudioUrl, audioSampleRate: ws });
-          } catch {
-            vocabWithAudio.push(v);
+          let uploaded = false;
+          for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+              const { bytes: wb, sampleRate: ws } = await generateTTS(v.word, voice, "slow");
+              const wav2 = pcmToWav(wb, ws);
+              const arr2 = new Uint8Array(wav2);
+              let bin2 = "";
+              for (let j = 0; j < arr2.byteLength; j++) bin2 += String.fromCharCode(arr2[j]);
+              const wordB64 = btoa(bin2);
+              const wordFileName = `${id}_sayfa${i}_kelime${vocabWithAudio.length}.wav`;
+              const wordAudioUrl = await supabaseUploadAudio(wordB64, wordFileName);
+              vocabWithAudio.push({ ...v, audioUrl: wordAudioUrl, audioSampleRate: ws });
+              uploaded = true;
+              break;
+            } catch {
+              await new Promise(r => setTimeout(r, 1000));
+            }
           }
+          if (!uploaded) vocabWithAudio.push(v);
         }
         pages[i] = { ...pages[i], vocabulary: vocabWithAudio };
 
