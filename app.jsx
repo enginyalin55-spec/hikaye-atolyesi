@@ -20,6 +20,20 @@ async function supabaseUploadImage(base64Data, fileName) {
   return data.url;
 }
 
+async function supabaseUploadAudio(audioB64, fileName) {
+  const res = await fetch("/api/proxy", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "supabase-upload-audio",
+      payload: { fileName, audioData: audioB64 }
+    }),
+  });
+  if (!res.ok) throw new Error("Ses yükleme hatası: " + res.status);
+  const data = await res.json();
+  return data.url;
+}
+
 // ── Supabase Yardımcıları ──────────────────
 async function supabaseSave(payload) {
   const res = await fetch("/api/proxy", {
@@ -271,6 +285,7 @@ function App() {
   const [kodError, setKodError] = useState(null);
   const [shareStatus, setShareStatus] = useState("idle"); // idle | preparing | done
   const [shareKod, setShareKod] = useState(null);
+  const [shareProgress, setShareProgress] = useState("");
   const [isStudentMode, setIsStudentMode] = useState(false);
   const [girisEkrani, setGirisEkrani] = useState(true);
   const [girisInput, setGirisInput] = useState("");
@@ -384,6 +399,7 @@ function App() {
 
       for (let i = 0; i < pages.length; i++) {
         // Ses üret
+        setShareProgress(`📄 Sayfa ${i+1}/${pages.length} metni seslendiriliyor...`);
         try {
           const { bytes, sampleRate } = await generateTTS(pages[i].text, voice, speed);
           const wav = pcmToWav(bytes, sampleRate);
@@ -393,12 +409,15 @@ function App() {
             binary += String.fromCharCode(wavArr[j]);
           }
           const b64 = btoa(binary);
-          pages[i] = { ...pages[i], audioB64: b64, audioSampleRate: sampleRate };
+          const audioFileName = `${id}_sayfa${i}_ses.wav`;
+          const audioUrl = await supabaseUploadAudio(b64, audioFileName);
+          pages[i] = { ...pages[i], audioUrl, audioSampleRate: sampleRate };
         } catch {
           // ses üretilemezse devam et
         }
 
         // Kelime seslerini üret
+        setShareProgress(`📖 Sayfa ${i+1}/${pages.length} kelimeleri seslendiriliyor...`);
         const vocabWithAudio = [];
         for (const v of (pages[i].vocabulary || [])) {
           try {
@@ -407,7 +426,10 @@ function App() {
             const arr2 = new Uint8Array(wav2);
             let bin2 = "";
             for (let j = 0; j < arr2.byteLength; j++) bin2 += String.fromCharCode(arr2[j]);
-            vocabWithAudio.push({ ...v, audioB64: btoa(bin2), audioSampleRate: ws });
+            const wordB64 = btoa(bin2);
+            const wordFileName = `${id}_sayfa${i}_kelime${vocabWithAudio.length}.wav`;
+            const wordAudioUrl = await supabaseUploadAudio(wordB64, wordFileName);
+            vocabWithAudio.push({ ...v, audioUrl: wordAudioUrl, audioSampleRate: ws });
           } catch {
             vocabWithAudio.push(v);
           }
@@ -415,6 +437,7 @@ function App() {
         pages[i] = { ...pages[i], vocabulary: vocabWithAudio };
 
         // Görseli Storage'a yükle
+        setShareProgress(`🖼️ Sayfa ${i+1}/${pages.length} görseli yükleniyor...`);
         try {
           if (pages[i].imageUrl && pages[i].imageUrl.startsWith("data:")) {
             const fileName = `${id}_sayfa${i}.png`;
@@ -438,6 +461,8 @@ function App() {
         speed,
         data: { ...storyData, pages }
       });
+
+      setShareProgress("✅ Tamamlandı!");
 
       setShareKod(kod);
       setShareStatus("done");
@@ -857,6 +882,18 @@ function App() {
               </div>
             </div>
 
+            {shareStatus === "preparing" && shareProgress && (
+              <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-5">
+                <p className="text-xs font-black text-orange-400 uppercase tracking-widest mb-2">
+                  ⏳ Hazırlanıyor
+                </p>
+                <p className="text-sm font-bold text-orange-700">{shareProgress}</p>
+                <div className="mt-3 h-2 bg-orange-100 rounded-full overflow-hidden">
+                  <div className="h-2 bg-orange-400 rounded-full animate-pulse w-full" />
+                </div>
+              </div>
+            )}
+
             {/* Paylaşım kodu göster */}
             {shareStatus === "done" && shareKod && (
               <div className="bg-orange-50 border-2 border-orange-200 rounded-2xl p-5 flex items-center justify-between gap-4">
@@ -945,47 +982,21 @@ function PageCard({ page, index, voice, speed, level, lang, isStudentMode }) {
     setAudioState("loading");
     try {
       // Öğrenci modunda gömülü ses varsa onu kullan
-      if (isStudentMode && page.audioB64) {
-  setAudioState("playing");
-  try {
-    const binary = atob(page.audioB64);
-    const bytes  = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    await audioCtx.resume();
-    
-    const wavBuffer = bytes.buffer;
-    const audioBuffer = await audioCtx.decodeAudioData(wavBuffer.slice(0));
-    
-    const source = audioCtx.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(audioCtx.destination);
-    
-    await new Promise(resolve => {
-      source.onended = () => { audioCtx.close(); resolve(); };
-      stopAudioRef.current = () => { 
-        try { source.stop(); audioCtx.close(); } catch {} 
-      };
-      source.start(0);
-    });
-  } catch(err) {
-    // fallback: blob dene
-    const binary = atob(page.audioB64);
-    const bytes  = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    const blob = new Blob([bytes], { type: "audio/wav" });
-    const url  = URL.createObjectURL(blob);
-    const audio = new Audio(url);
-    await new Promise(resolve => {
-      audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
-      audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
-      audio.play().catch(() => resolve());
-    });
-    stopAudioRef.current = () => { audio.pause(); URL.revokeObjectURL(url); };
-  }
-  setAudioState("idle");
-  return;
+      if (isStudentMode && page.audioUrl) {
+        setAudioState("playing");
+        try {
+          const audio = new Audio(page.audioUrl);
+          await new Promise(resolve => {
+            audio.onended = () => resolve();
+            audio.onerror = () => resolve();
+            stopAudioRef.current = () => { audio.pause(); audio.currentTime = 0; };
+            audio.play().catch(() => resolve());
+          });
+        } catch {
+          // ses çalınamadı
+        }
+        setAudioState("idle");
+        return;
       }
       // Normal mod: TTS üret
       const { bytes, sampleRate } = await generateTTS(page.text, voice, speed);
@@ -1022,21 +1033,14 @@ function PageCard({ page, index, voice, speed, level, lang, isStudentMode }) {
     // Öğrenci modunda gömülü ses varsa onu kullan
     if (isStudentMode) {
       const vocabItem = page.vocabulary?.find(v => v.word === word);
-      if (vocabItem?.audioB64) {
+      if (vocabItem?.audioUrl) {
         setWordAudioState(prev => ({ ...prev, [word]: "playing" }));
         try {
-          const binary = atob(vocabItem.audioB64);
-          const bytes  = new Uint8Array(binary.length);
-          for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-          const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-          await audioCtx.resume();
-          const audioBuffer = await audioCtx.decodeAudioData(bytes.buffer.slice(0));
-          const source = audioCtx.createBufferSource();
-          source.buffer = audioBuffer;
-          source.connect(audioCtx.destination);
+          const audio = new Audio(vocabItem.audioUrl);
           await new Promise(resolve => {
-            source.onended = () => { audioCtx.close(); resolve(); };
-            source.start(0);
+            audio.onended = () => resolve();
+            audio.onerror = () => resolve();
+            audio.play().catch(() => resolve());
           });
         } catch {
           await speakWordFallback(word);
