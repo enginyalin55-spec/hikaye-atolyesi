@@ -965,16 +965,31 @@ function PageCard({ page, index, voice, speed, level, lang, isStudentMode }) {
     setAudioState("loading");
     try {
       // Öğrenci modunda gömülü ses varsa onu kullan
-      if (isStudentMode && page.audioUrl) {
+      if (isStudentMode && (page.audioUrl || page.audioB64)) {
         setAudioState("playing");
         try {
-          const audio = new Audio(page.audioUrl);
-          await new Promise(resolve => {
-            audio.onended = () => resolve();
-            audio.onerror = () => resolve();
-            stopAudioRef.current = () => { audio.pause(); audio.currentTime = 0; };
-            audio.play().catch(() => resolve());
-          });
+          if (page.audioUrl) {
+            const audio = new Audio(page.audioUrl);
+            await new Promise(resolve => {
+              audio.onended = () => resolve();
+              audio.onerror = () => resolve();
+              stopAudioRef.current = () => { audio.pause(); audio.currentTime = 0; };
+              audio.play().catch(() => resolve());
+            });
+          } else {
+            const binary = atob(page.audioB64);
+            const bytes  = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            const blob = new Blob([bytes], { type: "audio/wav" });
+            const url  = URL.createObjectURL(blob);
+            const audio = new Audio(url);
+            await new Promise(resolve => {
+              audio.onended = () => { URL.revokeObjectURL(url); resolve(); };
+              audio.onerror = () => { URL.revokeObjectURL(url); resolve(); };
+              stopAudioRef.current = () => { audio.pause(); URL.revokeObjectURL(url); };
+              audio.play().catch(() => resolve());
+            });
+          }
         } catch {
           // ses çalınamadı
         }
