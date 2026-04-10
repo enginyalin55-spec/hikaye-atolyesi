@@ -986,6 +986,7 @@ ogrenciAd={ogrenciAd}
             <ExerciseSection
               storyData={storyData}
               lang={lang}
+              ogrenciAd={ogrenciAd}
             />
 
             <button
@@ -1248,7 +1249,7 @@ function PageCard({ page, index, voice, speed, level, lang, isStudentMode, hikay
 // EGZERSİZ BÖLÜMÜ
 // ═══════════════════════════════════════════
 
-function ExerciseSection({ storyData, lang }) {
+function ExerciseSection({ storyData, lang, ogrenciAd }) {
   const [activeTab, setActiveTab] = useState("quiz");
 
   const matchItems = storyData.pages
@@ -1284,15 +1285,9 @@ function ExerciseSection({ storyData, lang }) {
       </div>
 
       <div className="p-6">
-        {activeTab === "quiz"  && <QuizSection  quiz={storyData.quiz} />}
-        hikayeKod={storyData?.kod || ""}
-hikayeBaslik={storyData?.title || ""}
-ogrenciAd={ogrenciAd}
-        {activeTab === "fill"  && <FillSection  items={storyData.fillInTheBlanks} />}
-        hikayeKod={storyData?.kod || ""}
-hikayeBaslik={storyData?.title || ""}
-ogrenciAd={ogrenciAd}
-        {activeTab === "match" && <MatchSection items={matchItems} lang={lang} />}
+        {activeTab === "quiz" && <QuizSection quiz={storyData.quiz} hikayeKod={storyData?.kod || ""} hikayeBaslik={storyData?.title || ""} ogrenciAd={ogrenciAd} />}
+{activeTab === "fill" && <FillSection items={storyData.fillInTheBlanks} hikayeKod={storyData?.kod || ""} hikayeBaslik={storyData?.title || ""} ogrenciAd={ogrenciAd} />}
+{activeTab === "match" && <MatchSection items={matchItems} lang={lang} hikayeKod={storyData?.kod || ""} hikayeBaslik={storyData?.title || ""} ogrenciAd={ogrenciAd} />}
       </div>
     </div>
   );
@@ -1370,6 +1365,10 @@ function FillSection({ items, hikayeKod, hikayeBaslik, ogrenciAd }) {
     return <p className="text-gray-400 text-center py-8">Alıştırma bulunamadı.</p>;
 
   const handleCheck = (i) => {
+    const userAnswer = (inputs[i] || "").trim().toLowerCase();
+    const correct = items[i].answer.trim().toLowerCase();
+    const isCorrect = userAnswer === correct;
+    aktiviteKaydet(hikayeKod, hikayeBaslik, ogrenciAd, "bosluk_dolduruldu", { soru: i, yazilan: userAnswer, dogru: isCorrect, cevap: correct });
     setChecked(prev => ({ ...prev, [i]: true }));
   };
 
@@ -1384,7 +1383,6 @@ function FillSection({ items, hikayeKod, hikayeBaslik, ogrenciAd }) {
         const userAnswer = (inputs[i] || "").trim().toLowerCase();
         const correct    = item.answer.trim().toLowerCase();
         const isCorrect  = userAnswer === correct;
-        aktiviteKaydet(hikayeKod, hikayeBaslik, ogrenciAd, "bosluk_dolduruldu", { soru: i, yazilan: userAnswer, dogru: isCorrect, cevap: correct });
         const isChecked  = checked[i];
 
         const parts = item.sentence.split("_____");
