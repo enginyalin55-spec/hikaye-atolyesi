@@ -190,6 +190,23 @@ async function playAudio(bytes, sampleRate) {
   const { promise } = buildAudioSource(bytes, sampleRate);
   return promise;
 }
+
+// ── Aktivite Kaydet ──────────────────────
+async function aktiviteKaydet(hikayeKod, hikayeBaslik, ogrenciAd, aksiyon, detay = {}) {
+  try {
+    await fetch("/api/proxy", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "aktivite-kaydet",
+        payload: { hikaye_kod: hikayeKod, hikaye_baslik: hikayeBaslik, ogrenci_ad: ogrenciAd, aksiyon, detay }
+      }),
+    });
+  } catch {
+    // aktivite kaydedilemese de devam et
+  }
+}
+
 // ═══════════════════════════════════════════
 // HİKAYE ÜRETİM FONKSİYONU
 // ═══════════════════════════════════════════
@@ -289,6 +306,7 @@ function App() {
   const [isStudentMode, setIsStudentMode] = useState(false);
   const [girisEkrani, setGirisEkrani] = useState(true);
   const [girisInput, setGirisInput] = useState("");
+  const [ogrenciAd, setOgrenciAd] = useState("");
   const [girisHata, setGirisHata] = useState(null);
 
   useEffect(() => {
@@ -324,6 +342,27 @@ function App() {
       }
 
       setStoryData(prev => ({ ...prev, pages: updatedPages }));
+      // Otomatik kütüphane kaydı
+try {
+  await fetch("/api/proxy", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "kutuphane-save",
+      payload: {
+        baslik: story.title,
+        konu: topic,
+        seviye: level,
+        dil: lang,
+        ses_tonu: voice,
+        hiz: speed,
+        data: { ...story, pages: updatedPages }
+      }
+    }),
+  });
+} catch {
+  // kaydedilemese de devam et
+}
       setStatus("preview");
     } catch (err) {
       setError(err.message || "Bir hata oluştu. Lütfen tekrar deneyin.");
@@ -371,7 +410,7 @@ function App() {
 
   // ── Kod ile hikaye aç (öğrenci) ──
   const handleKodGir = async () => {
-    if (!kodInput.trim()) return;
+    if (!kodInput.trim() || !ogrenciAd.trim()) return;
     setKodLoading(true);
     setKodError(null);
     try {
@@ -383,6 +422,7 @@ function App() {
       setSpeed(entry.speed || "normal");
       setIsStudentMode(true);
       setStatus("preview");
+      await aktiviteKaydet(kodInput.trim(), entry.title, ogrenciAd.trim(), "hikaye_acildi", {});
     } catch (err) {
       setKodError("Geçersiz kod. Lütfen tekrar deneyin.");
     }
@@ -511,6 +551,15 @@ function App() {
                 >
                   {kodLoading ? "⏳" : "Gir"}
                 </button>
+                <input
+  type="text"
+  placeholder="Adınız Soyadınız"
+  value={ogrenciAd}
+  onChange={e => setOgrenciAd(e.target.value)}
+  className="flex-1 p-3 border-2 border-gray-100 rounded-2xl bg-gray-50 focus:bg-white focus:border-orange-400 outline-none font-bold text-sm mt-2"
+/>
+
+                
               </div>
               {kodError && <p className="text-red-500 text-xs font-bold">{kodError}</p>}
             </div>
@@ -574,6 +623,12 @@ function App() {
                 🗂️ Kütüphane {library.length > 0 && `(${library.length})`}
               </button>
             )}
+            <button
+  onClick={() => setStatus("istatistik")}
+  className="bg-violet-100 text-violet-700 px-4 py-2 rounded-xl font-bold text-sm"
+>
+  📊 İstatistikler
+</button>
           </div>
         </div>
       </nav>
@@ -770,6 +825,9 @@ function App() {
         )}
 
         {/* ── KÜTÜPHANESİ EKRANI ── */}
+        {status === "istatistik" && !isStudentMode && (
+  <IstatistikSayfasi />
+)}
         {status === "library" && (
           <div className="animate-fade-in space-y-4">
             <div className="flex items-center justify-between mb-6">
@@ -918,6 +976,9 @@ function App() {
                 level={level}
                 lang={lang}
                 isStudentMode={isStudentMode}
+                hikayeKod={storyData?.kod || ""}
+hikayeBaslik={storyData?.title || ""}
+ogrenciAd={ogrenciAd}
               />
             ))}
 
@@ -955,7 +1016,7 @@ function App() {
 // SAYFA KARTI BİLEŞENİ
 // ═══════════════════════════════════════════
 
-function PageCard({ page, index, voice, speed, level, lang, isStudentMode }) {
+function PageCard({ page, index, voice, speed, level, lang, isStudentMode, hikayeKod, hikayeBaslik, ogrenciAd }) {
   const [audioState, setAudioState] = useState("idle");
   const [wordAudioState, setWordAudioState] = useState({});
   const [showVocab, setShowVocab] = useState(false);
@@ -1008,6 +1069,7 @@ function PageCard({ page, index, voice, speed, level, lang, isStudentMode }) {
       const { promise, stop } = buildAudioSource(bytes, sampleRate);
       stopAudioRef.current = stop;
       await promise;
+      if (isStudentMode) await aktiviteKaydet(hikayeKod, hikayeBaslik, ogrenciAd, "ses_dinlendi", { sayfa: index + 1 });
       setAudioState("idle");
     } catch (err) {
       alert("Ses üretilemedi: " + err.message);
@@ -1057,6 +1119,7 @@ function PageCard({ page, index, voice, speed, level, lang, isStudentMode }) {
       const { bytes, sampleRate } = await generateTTS(`"${word}" kelimesini söyle: ${word}.`, voice, "slow", true);
       setWordAudioState(prev => ({ ...prev, [word]: "playing" }));
       await playAudio(bytes, sampleRate);
+      if (isStudentMode) await aktiviteKaydet(hikayeKod, hikayeBaslik, ogrenciAd, "kelime_dinlendi", { kelime: word, sayfa: index + 1 });
     } catch {
       setWordAudioState(prev => ({ ...prev, [word]: "playing" }));
       await speakWordFallback(word);
@@ -1222,7 +1285,13 @@ function ExerciseSection({ storyData, lang }) {
 
       <div className="p-6">
         {activeTab === "quiz"  && <QuizSection  quiz={storyData.quiz} />}
+        hikayeKod={storyData?.kod || ""}
+hikayeBaslik={storyData?.title || ""}
+ogrenciAd={ogrenciAd}
         {activeTab === "fill"  && <FillSection  items={storyData.fillInTheBlanks} />}
+        hikayeKod={storyData?.kod || ""}
+hikayeBaslik={storyData?.title || ""}
+ogrenciAd={ogrenciAd}
         {activeTab === "match" && <MatchSection items={matchItems} lang={lang} />}
       </div>
     </div>
@@ -1231,7 +1300,7 @@ function ExerciseSection({ storyData, lang }) {
 
 // ─── Quiz ─────────────────────────────────
 
-function QuizSection({ quiz }) {
+function QuizSection({ quiz, hikayeKod, hikayeBaslik, ogrenciAd }) {
   const [answers, setAnswers] = useState({});
   const [revealed, setRevealed] = useState(false);
 
@@ -1293,7 +1362,7 @@ function QuizSection({ quiz }) {
 
 // ─── Boşluk Doldurma ──────────────────────
 
-function FillSection({ items }) {
+function FillSection({ items, hikayeKod, hikayeBaslik, ogrenciAd }) {
   const [inputs, setInputs]   = useState({});
   const [checked, setChecked] = useState({});
 
@@ -1315,6 +1384,7 @@ function FillSection({ items }) {
         const userAnswer = (inputs[i] || "").trim().toLowerCase();
         const correct    = item.answer.trim().toLowerCase();
         const isCorrect  = userAnswer === correct;
+        aktiviteKaydet(hikayeKod, hikayeBaslik, ogrenciAd, "bosluk_dolduruldu", { soru: i, yazilan: userAnswer, dogru: isCorrect, cevap: correct });
         const isChecked  = checked[i];
 
         const parts = item.sentence.split("_____");
@@ -1395,7 +1465,7 @@ function FillSection({ items }) {
 
 // ─── Eşleştirme ───────────────────────────
 
-function MatchSection({ items, lang }) {
+function MatchSection({ items, lang, hikayeKod, hikayeBaslik, ogrenciAd }) {
   const [selected, setSelected] = useState(null); // index of selected audio card
   const [matched, setMatched]   = useState({});   // { index: word }
   const [wrong, setWrong]       = useState(null); // { index, word }
@@ -1519,6 +1589,247 @@ function MatchSection({ items, lang }) {
     </div>
   );
 }
+
+// ═══════════════════════════════════════════
+// İSTATİSTİK SAYFASI
+// ═══════════════════════════════════════════
+
+function IstatistikSayfasi() {
+  const [hikayeler, setHikayeler] = useState([]);
+  const [seciliHikaye, setSeciliHikaye] = useState(null);
+  const [aktiviteler, setAktiviteler] = useState([]);
+  const [seciliOgrenci, setSeciliOgrenci] = useState(null);
+  const [yukleniyor, setYukleniyor] = useState(false);
+
+  useEffect(() => {
+    const yukle = async () => {
+      try {
+        const res = await fetch("/api/proxy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "kutuphane-list", payload: {} }),
+        });
+        const data = await res.json();
+        setHikayeler(data || []);
+      } catch {}
+    };
+    yukle();
+  }, []);
+
+  const hikayeSec = async (hikaye) => {
+    setSeciliHikaye(hikaye);
+    setSeciliOgrenci(null);
+    setYukleniyor(true);
+    try {
+      const res = await fetch("/api/proxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "aktivite-getir", payload: { kod: hikaye.kod || hikaye.id } }),
+      });
+      const data = await res.json();
+      setAktiviteler(data || []);
+    } catch {}
+    setYukleniyor(false);
+  };
+
+  // Özet hesapla
+  const ogrenciler = seciliHikaye
+    ? [...new Set(aktiviteler.filter(a => a.aksiyon === "hikaye_acildi").map(a => a.ogrenci_ad))]
+    : [];
+
+  const quizAktiviteleri = aktiviteler.filter(a => a.aksiyon === "quiz_cevaplandi");
+  const quizSorular = seciliHikaye?.data?.quiz || [];
+
+  const soruIstatistikleri = quizSorular.map((soru, i) => {
+    const cevaplar = quizAktiviteleri.filter(a => a.detay?.soru === i);
+    const dogru = cevaplar.filter(a => a.detay?.dogru).length;
+    return {
+      soru: soru.question,
+      toplam: cevaplar.length,
+      dogru,
+      yanlis: cevaplar.length - dogru,
+      basari: cevaplar.length > 0 ? Math.round((dogru / cevaplar.length) * 100) : null,
+    };
+  });
+
+  const ogrenciDetay = seciliOgrenci
+    ? aktiviteler.filter(a => a.ogrenci_ad === seciliOgrenci)
+    : [];
+
+  return (
+    <div className="animate-fade-in space-y-6">
+      <h2 className="text-2xl font-black text-gray-900">📊 İstatistikler</h2>
+
+      {/* Hikaye Seçimi */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <p className="text-xs font-black text-indigo-400 uppercase tracking-widest mb-3">Hikaye Seç</p>
+        {hikayeler.length === 0 ? (
+          <p className="text-gray-400 text-sm">Henüz kayıtlı hikaye yok.</p>
+        ) : (
+          <div className="grid gap-2">
+            {hikayeler.map(h => (
+              <button
+                key={h.id}
+                onClick={() => hikayeSec(h)}
+                className={`text-left p-4 rounded-xl border-2 transition-all ${
+                  seciliHikaye?.id === h.id
+                    ? "border-indigo-400 bg-indigo-50"
+                    : "border-gray-100 hover:border-indigo-200"
+                }`}
+              >
+                <p className="font-black text-gray-900">{h.baslik}</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {LANGUAGES.find(l => l.code === h.dil)?.label} · Seviye {h.seviye} · {new Date(h.olusturma_tarihi).toLocaleDateString("tr-TR")}
+                </p>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Özet */}
+      {seciliHikaye && (
+        <div className="space-y-4">
+          {yukleniyor ? (
+            <div className="text-center py-10 text-gray-400 font-bold">Yükleniyor...</div>
+          ) : (
+            <>
+              {/* Genel Kartlar */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="bg-indigo-50 rounded-2xl p-4 text-center">
+                  <p className="text-3xl font-black text-indigo-600">{ogrenciler.length}</p>
+                  <p className="text-xs text-indigo-400 font-bold mt-1">Öğrenci</p>
+                </div>
+                <div className="bg-emerald-50 rounded-2xl p-4 text-center">
+                  <p className="text-3xl font-black text-emerald-600">
+                    {aktiviteler.filter(a => a.aksiyon === "ses_dinlendi").length}
+                  </p>
+                  <p className="text-xs text-emerald-400 font-bold mt-1">Ses Dinleme</p>
+                </div>
+                <div className="bg-orange-50 rounded-2xl p-4 text-center">
+                  <p className="text-3xl font-black text-orange-600">
+                    {aktiviteler.filter(a => a.aksiyon === "kelime_dinlendi").length}
+                  </p>
+                  <p className="text-xs text-orange-400 font-bold mt-1">Kelime Dinleme</p>
+                </div>
+                <div className="bg-violet-50 rounded-2xl p-4 text-center">
+                  <p className="text-3xl font-black text-violet-600">
+                    {quizAktiviteleri.length > 0
+                      ? Math.round((quizAktiviteleri.filter(a => a.detay?.dogru).length / quizAktiviteleri.length) * 100)
+                      : "-"}%
+                  </p>
+                  <p className="text-xs text-violet-400 font-bold mt-1">Quiz Başarısı</p>
+                </div>
+              </div>
+
+              {/* Quiz Soru İstatistikleri */}
+              {soruIstatistikleri.length > 0 && (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                  <p className="text-xs font-black text-indigo-400 uppercase tracking-widest mb-4">Quiz Soruları</p>
+                  <div className="space-y-3">
+                    {soruIstatistikleri.map((s, i) => (
+                      <div key={i} className="bg-gray-50 rounded-xl p-4">
+                        <p className="font-bold text-gray-800 text-sm mb-2">{i + 1}. {s.soru}</p>
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1 bg-gray-200 rounded-full h-2">
+                            <div
+                              className="bg-emerald-500 h-2 rounded-full"
+                              style={{ width: s.basari !== null ? `${s.basari}%` : "0%" }}
+                            />
+                          </div>
+                          <span className="text-xs font-black text-gray-500 w-16 text-right">
+                            {s.basari !== null ? `%${s.basari}` : "Veri yok"}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-1">
+                          ✅ {s.dogru} doğru · ❌ {s.yanlis} yanlış · {s.toplam} cevap
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Öğrenci Listesi */}
+              <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+                <p className="text-xs font-black text-indigo-400 uppercase tracking-widest mb-4">Öğrenciler</p>
+                {ogrenciler.length === 0 ? (
+                  <p className="text-gray-400 text-sm">Henüz hiç öğrenci açmamış.</p>
+                ) : (
+                  <div className="grid gap-2">
+                    {ogrenciler.map(ad => {
+                      const oAktivite = aktiviteler.filter(a => a.ogrenci_ad === ad);
+                      const oQuiz = oAktivite.filter(a => a.aksiyon === "quiz_cevaplandi");
+                      const oBasari = oQuiz.length > 0
+                        ? Math.round((oQuiz.filter(a => a.detay?.dogru).length / oQuiz.length) * 100)
+                        : null;
+                      return (
+                        <button
+                          key={ad}
+                          onClick={() => setSeciliOgrenci(seciliOgrenci === ad ? null : ad)}
+                          className={`text-left p-4 rounded-xl border-2 transition-all ${
+                            seciliOgrenci === ad
+                              ? "border-indigo-400 bg-indigo-50"
+                              : "border-gray-100 hover:border-indigo-200"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <p className="font-black text-gray-900">{ad}</p>
+                            <div className="flex gap-3 text-xs text-gray-400 font-bold">
+                              <span>🔊 {oAktivite.filter(a => a.aksiyon === "ses_dinlendi").length}</span>
+                              <span>📖 {oAktivite.filter(a => a.aksiyon === "kelime_dinlendi").length}</span>
+                              {oBasari !== null && (
+                                <span className={oBasari >= 70 ? "text-emerald-600" : "text-red-500"}>
+                                  🎯 %{oBasari}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Öğrenci Detayı */}
+                          {seciliOgrenci === ad && (
+                            <div className="mt-4 space-y-2 border-t border-gray-100 pt-4">
+                              <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Detay</p>
+                              {oQuiz.length > 0 && (
+                                <div className="space-y-1">
+                                  <p className="text-xs font-bold text-gray-500">Quiz Cevapları:</p>
+                                  {oQuiz.map((a, i) => (
+                                    <p key={i} className="text-xs text-gray-600">
+                                      {a.detay?.dogru ? "✅" : "❌"} Soru {(a.detay?.soru ?? 0) + 1}
+                                    </p>
+                                  ))}
+                                </div>
+                              )}
+                              {oAktivite.filter(a => a.aksiyon === "bosluk_dolduruldu").length > 0 && (
+                                <div className="space-y-1 mt-2">
+                                  <p className="text-xs font-bold text-gray-500">Boşluk Doldurma:</p>
+                                  {oAktivite.filter(a => a.aksiyon === "bosluk_dolduruldu").map((a, i) => (
+                                    <p key={i} className="text-xs text-gray-600">
+                                      {a.detay?.dogru ? "✅" : "❌"} Soru {(a.detay?.soru ?? 0) + 1}
+                                      {!a.detay?.dogru && ` — yazdı: "${a.detay?.yazilan}"`}
+                                    </p>
+                                  ))}
+                                </div>
+                              )}
+                              {oAktivite.filter(a => a.aksiyon === "eslestirme_tamamlandi").length > 0 && (
+                                <p className="text-xs text-emerald-600 font-bold mt-2">✅ Eşleştirmeyi tamamladı</p>
+                              )}
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════
 // İNDİRME FONKSİYONU — İnteraktif HTML
 // ═══════════════════════════════════════════
@@ -1721,6 +2032,7 @@ var QA = ${quizDataJS};
 var qAnswered = {};
 function quizPick(qi, oi) {
   if (qAnswered[qi] !== undefined) return;
+  aktiviteKaydet(hikayeKod, hikayeBaslik, ogrenciAd, "quiz_cevaplandi", { soru: qi, secilen: oi, dogru: oi === QA[qi], soruMetni: quiz[qi]?.question });
   qAnswered[qi] = (oi === QA[qi]);
   var box = document.getElementById('q' + qi);
   var btns = box.querySelectorAll('.option');
@@ -1749,6 +2061,7 @@ function checkFill(i) {
   var rst = document.getElementById('frst' + i);
   var val = inp.value.trim().toLowerCase();
   var ok  = val === answer.trim().toLowerCase();
+  aktiviteKaydet(hikayeKod, hikayeBaslik, ogrenciAd, "bosluk_dolduruldu", { soru: i, yazilan: val, dogru: ok, cevap: answer });
   inp.disabled = true;
   inp.classList.add(ok ? 'ok' : 'err');
   fb.textContent = ok ? '✅ Doğru!' : '❌ Doğrusu: "' + answer + '"';
@@ -1801,7 +2114,8 @@ function matchRight(j) {
     mSel = null;
     if (Object.keys(mDone).length === mTotal) {
       document.getElementById('match-ok').style.display = 'block';
-    }
+    aktiviteKaydet(hikayeKod, hikayeBaslik, ogrenciAd, "eslestirme_tamamlandi", { toplam: mTotal });
+      }
   } else {
     var lBtn = document.getElementById('ml' + mSel);
     var rBtn = document.getElementById('mr' + j);

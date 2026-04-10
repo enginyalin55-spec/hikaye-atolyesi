@@ -16,7 +16,6 @@ export default async function handler(req, res) {
       const binary = atob(audioData);
       const bytes  = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-
       const response = await fetch(
         `${SUPABASE_URL}/storage/v1/object/hikaye-gorseller/${fileName}`,
         {
@@ -29,12 +28,10 @@ export default async function handler(req, res) {
           body: bytes,
         }
       );
-
       if (!response.ok) {
         const err = await response.text();
         return res.status(response.status).json({ error: err });
       }
-
       const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/hikaye-gorseller/${fileName}`;
       return res.status(200).json({ url: publicUrl });
     } catch (err) {
@@ -49,7 +46,6 @@ export default async function handler(req, res) {
       const binary = atob(base64Data.split(",")[1] || base64Data);
       const bytes  = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-
       const response = await fetch(
         `${SUPABASE_URL}/storage/v1/object/hikaye-gorseller/${fileName}`,
         {
@@ -62,12 +58,10 @@ export default async function handler(req, res) {
           body: bytes,
         }
       );
-
       if (!response.ok) {
         const err = await response.text();
         return res.status(response.status).json({ error: err });
       }
-
       const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/hikaye-gorseller/${fileName}`;
       return res.status(200).json({ url: publicUrl });
     } catch (err) {
@@ -75,7 +69,7 @@ export default async function handler(req, res) {
     }
   }
 
-  // ── Supabase: Hikaye Kaydet ──────────────
+  // ── Supabase: Hikaye Paylaş ──────────────
   if (model === "supabase-save") {
     try {
       const response = await fetch(`${SUPABASE_URL}/rest/v1/paylasilan_hikayeler`, {
@@ -116,6 +110,114 @@ export default async function handler(req, res) {
         return res.status(404).json({ error: "Hikaye bulunamadı." });
       }
       return res.status(200).json(data[0]);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── Kütüphane: Kaydet ───────────────────
+  if (model === "kutuphane-save") {
+    try {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/ogretmen_kutuphanesi`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_KEY,
+          "Authorization": `Bearer ${SUPABASE_KEY}`,
+          "Prefer": "return=minimal"
+        },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        const err = await response.text();
+        return res.status(response.status).json({ error: err });
+      }
+      return res.status(200).json({ ok: true });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── Kütüphane: Listele ──────────────────
+  if (model === "kutuphane-list") {
+    try {
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/ogretmen_kutuphanesi?select=*&order=olusturma_tarihi.desc`,
+        {
+          headers: {
+            "apikey": SUPABASE_KEY,
+            "Authorization": `Bearer ${SUPABASE_KEY}`
+          }
+        }
+      );
+      const data = await response.json();
+      return res.status(200).json(data);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── Kütüphane: Sil ──────────────────────
+  if (model === "kutuphane-delete") {
+    try {
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/ogretmen_kutuphanesi?id=eq.${payload.id}`,
+        {
+          method: "DELETE",
+          headers: {
+            "apikey": SUPABASE_KEY,
+            "Authorization": `Bearer ${SUPABASE_KEY}`
+          }
+        }
+      );
+      if (!response.ok) {
+        const err = await response.text();
+        return res.status(response.status).json({ error: err });
+      }
+      return res.status(200).json({ ok: true });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── Aktivite: Kaydet ────────────────────
+  if (model === "aktivite-kaydet") {
+    try {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/ogrenci_aktiviteleri`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_KEY,
+          "Authorization": `Bearer ${SUPABASE_KEY}`,
+          "Prefer": "return=minimal"
+        },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        const err = await response.text();
+        return res.status(response.status).json({ error: err });
+      }
+      return res.status(200).json({ ok: true });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── Aktivite: Getir ─────────────────────
+  if (model === "aktivite-getir") {
+    try {
+      const kod = payload.kod?.toUpperCase();
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/ogrenci_aktiviteleri?hikaye_kod=eq.${kod}&select=*&order=tarih.asc`,
+        {
+          headers: {
+            "apikey": SUPABASE_KEY,
+            "Authorization": `Bearer ${SUPABASE_KEY}`
+          }
+        }
+      );
+      const data = await response.json();
+      return res.status(200).json(data);
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }
