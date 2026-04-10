@@ -551,16 +551,17 @@ try {
                 >
                   {kodLoading ? "⏳" : "Gir"}
                 </button>
-                <input
+                
+
+                
+              </div>
+              <input
   type="text"
   placeholder="Adınız Soyadınız"
   value={ogrenciAd}
   onChange={e => setOgrenciAd(e.target.value)}
-  className="flex-1 p-3 border-2 border-gray-100 rounded-2xl bg-gray-50 focus:bg-white focus:border-orange-400 outline-none font-bold text-sm mt-2"
+  className="w-full p-3 border-2 border-gray-100 rounded-2xl bg-gray-50 focus:bg-white focus:border-orange-400 outline-none font-bold text-sm"
 />
-
-                
-              </div>
               {kodError && <p className="text-red-500 text-xs font-bold">{kodError}</p>}
             </div>
 
