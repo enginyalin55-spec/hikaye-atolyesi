@@ -624,12 +624,14 @@ try {
                 🗂️ Kütüphane {library.length > 0 && `(${library.length})`}
               </button>
             )}
-            <button
-  onClick={() => setStatus("istatistik")}
-  className="bg-violet-100 text-violet-700 px-4 py-2 rounded-xl font-bold text-sm"
->
-  📊 İstatistikler
-</button>
+            {!isStudentMode && (
+  <button
+    onClick={() => setStatus("istatistik")}
+    className="bg-violet-100 text-violet-700 px-4 py-2 rounded-xl font-bold text-sm"
+  >
+    📊 İstatistikler
+  </button>
+)}
           </div>
         </div>
       </nav>
@@ -1324,7 +1326,7 @@ function QuizSection({ quiz, hikayeKod, hikayeBaslik, ogrenciAd }) {
               return (
                 <button
                   key={oi}
-                  onClick={() => !revealed && setAnswers(prev => ({ ...prev, [i]: oi }))}
+                  onClick={() => { if (!revealed) { aktiviteKaydet(hikayeKod, hikayeBaslik, ogrenciAd, "quiz_cevaplandi", { soru: i, secilen: oi, dogru: oi === q.answer, soruMetni: q.question }); setAnswers(prev => ({ ...prev, [i]: oi })); }}}
                   className={`text-left px-4 py-3 rounded-xl border-2 text-sm transition-all ${style}`}
                 >
                   {String.fromCharCode(65 + oi)}) {opt}
