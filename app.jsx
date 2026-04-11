@@ -355,8 +355,7 @@ try {
         seviye: level,
         dil: lang,
         ses_tonu: voice,
-        hiz: speed,
-        data: { ...story, pages: updatedPages }
+        hiz: speed
       }
     }),
   });
