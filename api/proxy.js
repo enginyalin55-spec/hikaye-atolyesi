@@ -206,7 +206,7 @@ export default async function handler(req, res) {
   // ── Aktivite: Getir ─────────────────────
   if (model === "aktivite-getir") {
     try {
-      const kod = payload.kod?.toUpperCase();
+      const kod = payload.kod;
       const response = await fetch(
         `${SUPABASE_URL}/rest/v1/ogrenci_aktiviteleri?hikaye_baslik=eq.${encodeURIComponent(kod)}&select=*&order=tarih.asc`,
         {
