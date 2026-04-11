@@ -1147,6 +1147,7 @@ function PageCard({ page, index, voice, speed, level, lang, isStudentMode, hikay
         } catch {
           await speakWordFallback(word);
         }
+        if (isStudentMode) await aktiviteKaydet(hikayeKod, hikayeBaslik, ogrenciAd, "kelime_dinlendi", { kelime: word, sayfa: index + 1 });
         setWordAudioState(prev => ({ ...prev, [word]: "idle" }));
         return;
       }
