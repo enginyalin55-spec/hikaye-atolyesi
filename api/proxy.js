@@ -142,7 +142,7 @@ export default async function handler(req, res) {
   if (model === "kutuphane-list") {
     try {
       const response = await fetch(
-        `${SUPABASE_URL}/rest/v1/ogretmen_kutuphanesi?select=*&order=olusturma_tarihi.desc`,
+        `${SUPABASE_URL}/rest/v1/paylasilan_hikayeler?select=id,kod,title,level,lang,created_at&order=created_at.desc`,
         {
           headers: {
             "apikey": SUPABASE_KEY,

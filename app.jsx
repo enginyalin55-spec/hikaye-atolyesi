@@ -1625,7 +1625,7 @@ function IstatistikSayfasi() {
       const res = await fetch("/api/proxy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "aktivite-getir", payload: { kod: hikaye.kod || hikaye.id } }),
+        body: JSON.stringify({ model: "aktivite-getir", payload: { kod: hikaye.baslik } }),
       });
       const data = await res.json();
       setAktiviteler(data || []);
@@ -1678,9 +1678,9 @@ function IstatistikSayfasi() {
                     : "border-gray-100 hover:border-indigo-200"
                 }`}
               >
-                <p className="font-black text-gray-900">{h.baslik}</p>
+                <p className="font-black text-gray-900">{h.title || h.baslik}</p>
                 <p className="text-xs text-gray-400 mt-1">
-                  {LANGUAGES.find(l => l.code === h.dil)?.label} · Seviye {h.seviye} · {new Date(h.olusturma_tarihi).toLocaleDateString("tr-TR")}
+                  {LANGUAGES.find(l => l.code === h.dil)?.label} · Seviye {h.seviye} · {new Date(h.created_at || h.olusturma_tarihi).toLocaleDateString("tr-TR")}
                 </p>
               </button>
             ))}
