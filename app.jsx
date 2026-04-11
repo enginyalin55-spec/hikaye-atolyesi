@@ -1064,6 +1064,7 @@ function PageCard({ page, index, voice, speed, level, lang, isStudentMode, hikay
         } catch {
           // ses çalınamadı
         }
+        await aktiviteKaydet(hikayeKod, hikayeBaslik, ogrenciAd, "ses_dinlendi", { sayfa: index + 1 });
         setAudioState("idle");
         return;
       }
@@ -1329,7 +1330,7 @@ function QuizSection({ quiz, hikayeKod, hikayeBaslik, ogrenciAd }) {
                   onClick={() => { if (!revealed) { aktiviteKaydet(hikayeKod, hikayeBaslik, ogrenciAd, "quiz_cevaplandi", { soru: i, secilen: oi, dogru: oi === q.answer, soruMetni: q.question }); setAnswers(prev => ({ ...prev, [i]: oi })); }}}
                   className={`text-left px-4 py-3 rounded-xl border-2 text-sm transition-all ${style}`}
                 >
-                  {String.fromCharCode(65 + oi)}) {opt}
+                  {String.fromCharCode(65 + oi)}) {opt.replace(/^[A-Da-d][).]\s*/,"")}
                 </button>
               );
             })}
