@@ -1680,7 +1680,7 @@ function IstatistikSayfasi() {
               >
                 <p className="font-black text-gray-900">{h.title || h.baslik}</p>
                 <p className="text-xs text-gray-400 mt-1">
-                  {LANGUAGES.find(l => l.code === h.dil)?.label} · Seviye {h.seviye} · {new Date(h.created_at || h.olusturma_tarihi).toLocaleDateString("tr-TR")}
+                  {LANGUAGES.find(l => l.code === (h.lang || h.dil))?.label} · Seviye {h.level || h.seviye} · {new Date(h.created_at || h.olusturma_tarihi).toLocaleDateString("tr-TR")}
                 </p>
               </button>
             ))}
