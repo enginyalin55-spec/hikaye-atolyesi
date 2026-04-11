@@ -1625,7 +1625,7 @@ function IstatistikSayfasi() {
       const res = await fetch("/api/proxy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "aktivite-getir", payload: { kod: hikaye.baslik } }),
+        body: JSON.stringify({ model: "aktivite-getir", payload: { kod: hikaye.title || hikaye.baslik } }),
       });
       const data = await res.json();
       setAktiviteler(data || []);
