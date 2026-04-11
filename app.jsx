@@ -308,6 +308,7 @@ function App() {
   const [girisEkrani, setGirisEkrani] = useState(true);
   const [girisInput, setGirisInput] = useState("");
   const [ogrenciAd, setOgrenciAd] = useState("");
+  const [girisSaati, setGirisSaati] = useState(null);
   const [girisHata, setGirisHata] = useState(null);
 
   useEffect(() => {
@@ -423,6 +424,7 @@ try {
       setIsStudentMode(true);
       setStatus("preview");
       await aktiviteKaydet(kodInput.trim(), entry.title, ogrenciAd.trim(), "hikaye_acildi", {});
+setGirisSaati(Date.now());
     } catch (err) {
       setKodError("Geçersiz kod. Lütfen tekrar deneyin.");
     }
@@ -923,24 +925,29 @@ try {
                     ⬇️ İndir
                   </button>
                 )}
-                <button
-                  onClick={() => { 
-  if (isStudentMode) { 
-    setGirisEkrani(true); 
-    setStatus("idle"); 
-    setIsStudentMode(false); 
-    setKodInput(""); 
-    setOgrenciAd(""); 
-  } else { 
-    setStatus("idle"); 
-    setShareStatus("idle"); 
-    setShareKod(null); 
-  } 
-}}
-                  className="bg-gray-100 text-gray-600 px-4 py-2 rounded-xl font-bold text-sm"
-                >
-                  {isStudentMode ? "← Geri" : "🔄 Yeni"}
-                </button>
+               <button
+  onClick={async () => { 
+    if (isStudentMode) {
+      if (girisSaati) {
+        const sure = Math.round((Date.now() - girisSaati) / 1000 / 60);
+        await aktiviteKaydet(storyData?.title || "", storyData?.title || "", ogrenciAd, "sure_gecirdi", { dakika: sure });
+      }
+      setGirisSaati(null);
+      setGirisEkrani(true);
+      setStatus("idle");
+      setIsStudentMode(false);
+      setKodInput("");
+      setOgrenciAd("");
+    } else { 
+      setStatus("idle"); 
+      setShareStatus("idle"); 
+      setShareKod(null); 
+    } 
+  }}
+  className="bg-gray-100 text-gray-600 px-4 py-2 rounded-xl font-bold text-sm"
+>
+  {isStudentMode ? "← Geri" : "🔄 Yeni"}
+</button>
               </div>
             </div>
 
@@ -1885,6 +1892,13 @@ function IstatistikSayfasi() {
                                 <p className="text-xs text-emerald-600 font-bold">✅ Eşleştirmeyi tamamladı</p>
                               ) : (
                                 <p className="text-xs text-gray-400 font-bold">⏳ Eşleştirmeyi henüz tamamlamadı</p>
+                              )}
+
+                              {/* Geçirilen süre */}
+                              {oAktivite.filter(a => a.aksiyon === "sure_gecirdi").length > 0 && (
+                                <p className="text-xs text-blue-600 font-bold">
+                                  ⏱️ Hikayede geçirdiği süre: {oAktivite.filter(a => a.aksiyon === "sure_gecirdi").reduce((acc, a) => acc + (a.detay?.dakika || 0), 0)} dakika
+                                </p>
                               )}
 
                             </div>
