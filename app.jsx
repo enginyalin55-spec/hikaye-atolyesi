@@ -1804,32 +1804,89 @@ function IstatistikSayfasi() {
 
                           {/* Öğrenci Detayı */}
                           {seciliOgrenci === ad && (
-                            <div className="mt-4 space-y-2 border-t border-gray-100 pt-4">
-                              <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2">Detay</p>
+                            <div className="mt-4 space-y-4 border-t border-gray-100 pt-4">
+
+                              {/* Giriş zamanı */}
+                              {oAktivite.filter(a => a.aksiyon === "hikaye_acildi").map((a, i) => (
+                                <p key={i} className="text-xs text-gray-400">
+                                  🕐 Hikayeyi açtı: {new Date(a.tarih).toLocaleString("tr-TR")}
+                                </p>
+                              ))}
+
+                              {/* Ses dinleme */}
+                              {oAktivite.filter(a => a.aksiyon === "ses_dinlendi").length > 0 && (
+                                <div>
+                                  <p className="text-xs font-black text-gray-500 mb-1">🔊 Dinlediği Sayfalar:</p>
+                                  <div className="flex flex-wrap gap-1">
+                                    {oAktivite.filter(a => a.aksiyon === "ses_dinlendi").map((a, i) => (
+                                      <span key={i} className="bg-emerald-100 text-emerald-700 text-xs font-bold px-2 py-1 rounded-lg">
+                                        Sayfa {a.detay?.sayfa}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Kelime dinleme */}
+                              {oAktivite.filter(a => a.aksiyon === "kelime_dinlendi").length > 0 && (
+                                <div>
+                                  <p className="text-xs font-black text-gray-500 mb-1">📖 Dinlediği Kelimeler:</p>
+                                  <div className="flex flex-wrap gap-1">
+                                    {oAktivite.filter(a => a.aksiyon === "kelime_dinlendi").map((a, i) => (
+                                      <span key={i} className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-1 rounded-lg">
+                                        {a.detay?.kelime}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Quiz */}
                               {oQuiz.length > 0 && (
-                                <div className="space-y-1">
-                                  <p className="text-xs font-bold text-gray-500">Quiz Cevapları:</p>
-                                  {oQuiz.map((a, i) => (
-                                    <p key={i} className="text-xs text-gray-600">
-                                      {a.detay?.dogru ? "✅" : "❌"} Soru {(a.detay?.soru ?? 0) + 1}
-                                    </p>
-                                  ))}
+                                <div>
+                                  <p className="text-xs font-black text-gray-500 mb-1">🎯 Quiz Cevapları:</p>
+                                  <div className="space-y-1">
+                                    {oQuiz.map((a, i) => (
+                                      <div key={i} className="flex items-start gap-2">
+                                        <span>{a.detay?.dogru ? "✅" : "❌"}</span>
+                                        <div>
+                                          <p className="text-xs text-gray-700 font-bold">Soru {(a.detay?.soru ?? 0) + 1}</p>
+                                          {a.detay?.soruMetni && <p className="text-xs text-gray-400">{a.detay.soruMetni}</p>}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
                                 </div>
                               )}
+
+                              {/* Boşluk Doldurma */}
                               {oAktivite.filter(a => a.aksiyon === "bosluk_dolduruldu").length > 0 && (
-                                <div className="space-y-1 mt-2">
-                                  <p className="text-xs font-bold text-gray-500">Boşluk Doldurma:</p>
-                                  {oAktivite.filter(a => a.aksiyon === "bosluk_dolduruldu").map((a, i) => (
-                                    <p key={i} className="text-xs text-gray-600">
-                                      {a.detay?.dogru ? "✅" : "❌"} Soru {(a.detay?.soru ?? 0) + 1}
-                                      {!a.detay?.dogru && ` — yazdı: "${a.detay?.yazilan}"`}
-                                    </p>
-                                  ))}
+                                <div>
+                                  <p className="text-xs font-black text-gray-500 mb-1">✏️ Boşluk Doldurma:</p>
+                                  <div className="space-y-1">
+                                    {oAktivite.filter(a => a.aksiyon === "bosluk_dolduruldu").map((a, i) => (
+                                      <div key={i} className="flex items-start gap-2">
+                                        <span>{a.detay?.dogru ? "✅" : "❌"}</span>
+                                        <div>
+                                          <p className="text-xs text-gray-700 font-bold">Soru {(a.detay?.soru ?? 0) + 1}</p>
+                                          <p className="text-xs text-gray-400">
+                                            Yazdı: "<span className={a.detay?.dogru ? "text-emerald-600" : "text-red-500"}>{a.detay?.yazilan}</span>"
+                                            {!a.detay?.dogru && <span className="text-gray-400"> → Doğrusu: "{a.detay?.cevap}"</span>}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
                                 </div>
                               )}
-                              {oAktivite.filter(a => a.aksiyon === "eslestirme_tamamlandi").length > 0 && (
-                                <p className="text-xs text-emerald-600 font-bold mt-2">✅ Eşleştirmeyi tamamladı</p>
+
+                              {/* Eşleştirme */}
+                              {oAktivite.filter(a => a.aksiyon === "eslestirme_tamamlandi").length > 0 ? (
+                                <p className="text-xs text-emerald-600 font-bold">✅ Eşleştirmeyi tamamladı</p>
+                              ) : (
+                                <p className="text-xs text-gray-400 font-bold">⏳ Eşleştirmeyi henüz tamamlamadı</p>
                               )}
+
                             </div>
                           )}
                         </button>
