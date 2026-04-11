@@ -1004,12 +1004,14 @@ ogrenciAd={ogrenciAd}
               ogrenciAd={ogrenciAd}
             />
 
-            <button
-              onClick={() => setStatus("idle")}
-              className="w-full py-5 text-gray-400 font-bold hover:text-gray-700 transition-colors"
-            >
-              ← Başa Dön ve Yeni Hikaye Yaz
-            </button>
+            {!isStudentMode && (
+  <button
+    onClick={() => setStatus("idle")}
+    className="w-full py-5 text-gray-400 font-bold hover:text-gray-700 transition-colors"
+  >
+    ← Başa Dön ve Yeni Hikaye Yaz
+  </button>
+)}
           </div>
         )}
 
