@@ -193,6 +193,7 @@ async function playAudio(bytes, sampleRate) {
 
 // ── Aktivite Kaydet ──────────────────────
 async function aktiviteKaydet(hikayeKod, hikayeBaslik, ogrenciAd, aksiyon, detay = {}) {
+  if (!hikayeBaslik) return;
   try {
     await fetch("/api/proxy", {
       method: "POST",
