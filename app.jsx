@@ -309,6 +309,16 @@ function App() {
   const [girisInput, setGirisInput] = useState("");
   const [ogrenciAd, setOgrenciAd] = useState("");
   const [girisSaati, setGirisSaati] = useState(null);
+  useEffect(() => {
+    const handleUnload = () => {
+      if (isStudentMode && girisSaati && storyData) {
+        const sure = Math.round((Date.now() - girisSaati) / 1000 / 60);
+        aktiviteKaydet(storyData?.title || "", storyData?.title || "", ogrenciAd, "sure_gecirdi", { dakika: sure });
+      }
+    };
+    window.addEventListener("beforeunload", handleUnload);
+    return () => window.removeEventListener("beforeunload", handleUnload);
+  }, [isStudentMode, girisSaati, storyData, ogrenciAd]);
   const [girisHata, setGirisHata] = useState(null);
 
   useEffect(() => {
