@@ -544,7 +544,7 @@ try {
                   className="flex-1 p-3 border-2 border-gray-100 rounded-2xl bg-gray-50 focus:bg-white focus:border-orange-400 outline-none font-bold text-sm"
                 />
                 <button
-                  onClick={async () => { await handleKodGir(); if (!kodError) setGirisEkrani(false); }}
+                  onClick={async () => { if (!kodInput.trim() || !ogrenciAd.trim()) return; await handleKodGir(); if (!kodError) setGirisEkrani(false); }}
                   disabled={kodLoading || !kodInput.trim()}
                   className="bg-orange-500 text-white px-4 py-3 rounded-2xl font-black text-sm disabled:opacity-50"
                 >
