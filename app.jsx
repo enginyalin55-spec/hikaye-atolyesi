@@ -923,7 +923,19 @@ try {
                   </button>
                 )}
                 <button
-                  onClick={() => { setStatus("idle"); setIsStudentMode(false); setShareStatus("idle"); setShareKod(null); }}
+                  onClick={() => { 
+  if (isStudentMode) { 
+    setGirisEkrani(true); 
+    setStatus("idle"); 
+    setIsStudentMode(false); 
+    setKodInput(""); 
+    setOgrenciAd(""); 
+  } else { 
+    setStatus("idle"); 
+    setShareStatus("idle"); 
+    setShareKod(null); 
+  } 
+}}
                   className="bg-gray-100 text-gray-600 px-4 py-2 rounded-xl font-bold text-sm"
                 >
                   {isStudentMode ? "← Geri" : "🔄 Yeni"}
