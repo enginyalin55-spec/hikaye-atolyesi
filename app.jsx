@@ -1396,9 +1396,9 @@ function ExerciseSection({ storyData, lang, ogrenciAd }) {
           </div>
         ) : (
           <>
-            {activeTab === "quiz" && <QuizSection quiz={storyData.quiz} hikayeKod={storyData?.kod || ""} hikayeBaslik={storyData?.title || ""} ogrenciAd={ogrenciAd} onBitti={(puan) => { setQuizPuan(puan); kontrolEt(puan, null, null); }} />}
-            {activeTab === "fill" && <FillSection items={storyData.fillInTheBlanks} hikayeKod={storyData?.kod || ""} hikayeBaslik={storyData?.title || ""} ogrenciAd={ogrenciAd} onBitti={(puan) => { setBoslukPuan(puan); kontrolEt(null, puan, null); }} />}
-            {activeTab === "match" && <MatchSection items={matchItems} lang={lang} hikayeKod={storyData?.kod || ""} hikayeBaslik={storyData?.title || ""} ogrenciAd={ogrenciAd} onBitti={() => { setEslestirmeBitti(true); kontrolEt(null, null, true); }} />}
+            <div className={activeTab === "quiz" ? "" : "hidden"}><QuizSection quiz={storyData.quiz} hikayeKod={storyData?.kod || ""} hikayeBaslik={storyData?.title || ""} ogrenciAd={ogrenciAd} onBitti={(puan) => { setQuizPuan(puan); kontrolEt(puan, null, null); }} /></div>
+<div className={activeTab === "fill" ? "" : "hidden"}><FillSection items={storyData.fillInTheBlanks} hikayeKod={storyData?.kod || ""} hikayeBaslik={storyData?.title || ""} ogrenciAd={ogrenciAd} onBitti={(puan) => { setBoslukPuan(puan); kontrolEt(null, puan, null); }} /></div>
+<div className={activeTab === "match" ? "" : "hidden"}><MatchSection items={matchItems} lang={lang} hikayeKod={storyData?.kod || ""} hikayeBaslik={storyData?.title || ""} ogrenciAd={ogrenciAd} onBitti={() => { setEslestirmeBitti(true); kontrolEt(null, null, true); }} /></div>
           </>
         )}
       </div>
