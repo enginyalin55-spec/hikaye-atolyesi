@@ -161,7 +161,7 @@ export default async function handler(req, res) {
   if (model === "kutuphane-delete") {
     try {
       const response = await fetch(
-        `${SUPABASE_URL}/rest/v1/ogretmen_kutuphanesi?id=eq.${payload.id}`,
+        `${SUPABASE_URL}/rest/v1/paylasilan_hikayeler?id=eq.${payload.id}`,
         {
           method: "DELETE",
           headers: {

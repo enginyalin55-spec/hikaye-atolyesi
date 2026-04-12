@@ -322,8 +322,21 @@ function App() {
   const [girisHata, setGirisHata] = useState(null);
 
   useEffect(() => {
-    const saved = localStorage.getItem("hikaye_kutuphanesi");
-    if (saved) setLibrary(JSON.parse(saved));
+    const yukle = async () => {
+      try {
+        const res = await fetch("/api/proxy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "kutuphane-list", payload: {} }),
+        });
+        const data = await res.json();
+        setLibrary(data || []);
+      } catch {
+        const saved = localStorage.getItem("hikaye_kutuphanesi");
+        if (saved) setLibrary(JSON.parse(saved));
+      }
+    };
+    yukle();
   }, []);
 
   // ── Ana üretim fonksiyonu ──
@@ -402,19 +415,26 @@ try {
   };
 
   // ── Kütüphaneden sil ──
-  const handleDelete = (id) => {
-    const updated = library.filter(l => l.id !== id);
-    setLibrary(updated);
-    localStorage.setItem("hikaye_kutuphanesi", JSON.stringify(updated));
+  const handleDelete = async (id) => {
+    try {
+      await fetch("/api/proxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "kutuphane-delete", payload: { id } }),
+      });
+      setLibrary(prev => prev.filter(l => l.id !== id));
+    } catch {
+      setLibrary(prev => prev.filter(l => l.id !== id));
+    }
   };
 
   // ── Kütüphaneden aç ──
   const handleOpen = (entry) => {
     setStoryData(entry.data);
-    setLevel(entry.level);
-    setLang(entry.lang);
-    setVoice(entry.voice || "Kore");
-    setSpeed(entry.speed || "normal");
+    setLevel(entry.level || entry.seviye);
+    setLang(entry.lang || entry.dil);
+    setVoice(entry.voice || entry.ses_tonu || "Kore");
+    setSpeed(entry.speed || entry.hiz || "normal");
     setStatus("preview");
     setIsStudentMode(false);
   };
@@ -869,12 +889,12 @@ setGirisSaati(Date.now());
                     className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center justify-between gap-4"
                   >
                     <div className="flex-1 min-w-0">
-                      <p className="font-black text-gray-900 truncate">{entry.title}</p>
+                      <p className="font-black text-gray-900 truncate">{entry.title || entry.baslik}</p>
                       <p className="text-xs text-gray-400 font-medium mt-1">
-                        {LANGUAGES.find(l => l.code === entry.lang)?.label} · 
-                        Seviye {entry.level} · {entry.date}
+                        {LANGUAGES.find(l => l.code === (entry.lang || entry.dil))?.label} · 
+                        Seviye {entry.level || entry.seviye} · {entry.date || new Date(entry.created_at).toLocaleDateString("tr-TR")}
                       </p>
-                      <p className="text-xs text-gray-500 mt-1 truncate italic">{entry.topic}</p>
+                      <p className="text-xs text-gray-500 mt-1 truncate italic">{entry.topic || entry.konu}</p>
                     </div>
                     <div className="flex gap-2 flex-shrink-0">
                       <button
