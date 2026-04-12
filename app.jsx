@@ -304,7 +304,7 @@ function App() {
   const [shareStatus, setShareStatus] = useState("idle"); // idle | preparing | done
   const [shareKod, setShareKod] = useState(null);
   const [shareProgress, setShareProgress] = useState("");
-  const [bitisTarihi, setBitisTarihi] = useState("");
+  const [showShareModal, setShowShareModal] = useState(false);
   const [isStudentMode, setIsStudentMode] = useState(false);
   const [girisEkrani, setGirisEkrani] = useState(true);
   const [girisInput, setGirisInput] = useState("");
@@ -475,7 +475,7 @@ setGirisSaati(Date.now());
   };
 
   // ── Paylaşıma hazırla ──
-  const handleShare = async () => {
+  const handleShare = async (tarihiDegeri = null) => {
     if (!storyData) return;
     setShareStatus("preparing");
     try {
@@ -550,7 +550,7 @@ setGirisSaati(Date.now());
         lang,
         voice,
         speed,
-        bitis_tarihi: bitisTarihi || null,
+        bitis_tarihi: tarihiDegeri || null,
         data: { ...storyData, pages }
       });
 
@@ -566,6 +566,14 @@ setGirisSaati(Date.now());
 
   return (
     <div className="min-h-screen bg-slate-50 text-gray-800 pb-20">
+      {/* PAYLAŞIM MODALI */}
+      {showShareModal && (
+        <ShareModal
+          onConfirm={(tarihi) => { setShowShareModal(false); handleShare(tarihi); }}
+          onCancel={() => setShowShareModal(false)}
+        />
+      )}
+
       {/* GİRİŞ EKRANI */}
       {girisEkrani && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur z-50 flex items-center justify-center p-4">
@@ -953,18 +961,8 @@ setGirisSaati(Date.now());
                   </button>
                 )}
                 {!isStudentMode && (
-                  <input
-                    type="date"
-                    value={bitisTarihi}
-                    onChange={e => setBitisTarihi(e.target.value)}
-                    min={new Date().toISOString().split("T")[0]}
-                    title="Bitiş tarihi (boş = süresiz)"
-                    className="border-2 border-orange-200 rounded-xl px-3 py-2 text-sm font-bold text-gray-600 bg-orange-50 focus:bg-white focus:border-orange-400 outline-none"
-                  />
-                )}
-                {!isStudentMode && (
                   <button
-                    onClick={handleShare}
+                    onClick={() => setShowShareModal(true)}
                     disabled={shareStatus === "preparing"}
                     className="bg-orange-500 text-white px-4 py-2 rounded-xl font-bold text-sm disabled:opacity-50"
                   >
@@ -1091,6 +1089,113 @@ ogrenciAd={ogrenciAd}
     </div>
   );
 }
+// ═══════════════════════════════════════════
+// PAYLAŞIM MODALI
+// ═══════════════════════════════════════════
+
+function ShareModal({ onConfirm, onCancel }) {
+  const [suresiz, setSuresiz] = useState(true);
+  const [modalTarihi, setModalTarihi] = useState("");
+  const bugun = new Date().toISOString().split("T")[0];
+
+  const handleBaslat = () => {
+    onConfirm(suresiz ? null : (modalTarihi || null));
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden animate-fade-in">
+
+        {/* Başlık */}
+        <div className="bg-gradient-to-r from-orange-500 to-amber-500 p-6 text-white">
+          <p className="text-2xl mb-1">📤</p>
+          <h2 className="text-xl font-black">Hikayeyi Paylaş</h2>
+          <p className="text-sm opacity-80 mt-1">Öğrenciler için paylaşım kodu oluştur</p>
+        </div>
+
+        <div className="p-6 space-y-5">
+
+          {/* Son erişim tarihi */}
+          <div className="space-y-3">
+            <p className="text-xs font-black text-gray-500 uppercase tracking-widest">
+              Son Erişim Tarihi (isteğe bağlı)
+            </p>
+
+            {/* Toggle butonlar */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setSuresiz(true)}
+                className={`py-3 rounded-2xl font-black text-sm transition-all border-2 ${
+                  suresiz
+                    ? "bg-orange-50 border-orange-400 text-orange-700"
+                    : "bg-gray-50 border-gray-100 text-gray-400 hover:border-gray-300"
+                }`}
+              >
+                ♾️ Süresiz
+              </button>
+              <button
+                onClick={() => setSuresiz(false)}
+                className={`py-3 rounded-2xl font-black text-sm transition-all border-2 ${
+                  !suresiz
+                    ? "bg-orange-50 border-orange-400 text-orange-700"
+                    : "bg-gray-50 border-gray-100 text-gray-400 hover:border-gray-300"
+                }`}
+              >
+                📅 Tarihi Belirle
+              </button>
+            </div>
+
+            {/* Tarih seçici */}
+            {!suresiz && (
+              <div className="animate-fade-in">
+                <input
+                  type="date"
+                  value={modalTarihi}
+                  onChange={e => setModalTarihi(e.target.value)}
+                  min={bugun}
+                  className="w-full border-2 border-orange-200 rounded-2xl px-4 py-3 text-sm font-bold text-gray-700 bg-orange-50 focus:bg-white focus:border-orange-400 outline-none transition-all"
+                />
+                {modalTarihi && (
+                  <p className="text-xs text-orange-500 font-bold mt-2">
+                    ⚠️ {new Date(modalTarihi).toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric" })} tarihinden sonra erişilemez.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {suresiz && (
+              <p className="text-xs text-gray-400 font-medium">
+                Öğrenciler bu hikayeye her zaman erişebilir.
+              </p>
+            )}
+          </div>
+
+          {/* Butonlar */}
+          <div className="flex gap-3 pt-1">
+            <button
+              onClick={onCancel}
+              className="flex-1 py-3 rounded-2xl font-black text-sm bg-gray-100 text-gray-600 hover:bg-gray-200 transition-all"
+            >
+              İptal
+            </button>
+            <button
+              onClick={handleBaslat}
+              disabled={!suresiz && !modalTarihi}
+              className={`flex-1 py-3 rounded-2xl font-black text-sm transition-all ${
+                !suresiz && !modalTarihi
+                  ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                  : "bg-orange-500 text-white hover:bg-orange-600 shadow-lg shadow-orange-200"
+              }`}
+            >
+              🚀 Paylaşımı Başlat
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════
 // SAYFA KARTI BİLEŞENİ
 // ═══════════════════════════════════════════
