@@ -104,6 +104,20 @@ const LEVELS = [
   { id: "C1", desc: "Akademik ve profesyonel seviye dil." },
 ];
 
+const LEVEL_INSTRUCTIONS = {
+  A1: "Sadece geniş zaman kullan. Cümleler maksimum 5-6 kelime olsun. Somut, günlük nesneler ve eylemler kullan. Tekrarlayan kalıp ifadeler olsun. Soyut kavram kullanma.",
+  A2: "Geniş zaman ve geçmiş zaman kullan. Basit bağlaçlar ekle (ve, ama, çünkü). Günlük rutinler, alışveriş, aile konuları işle. Cümleler kısa ama biraz daha zengin olabilir.",
+  B1: "Karışık zamanlar kullan. Karakterlerin fikir ve duygularını ifade etsin. Hafif soyut konular olabilir. Basit savlar ve gerekçeler ekle.",
+  B2: "Pasif yapılar ve soyut temalar kullan. Karşıt bakış açıları olsun. Tartışmalı veya düşündürücü temalar işlenebilir. Karmaşık cümle yapıları kullan.",
+  C1: "Akademik ve mesleki register kullan. İroni, nüans ve örtük anlam ekle. Alt temaları birbirine bağla. Karmaşık söylem yapısı kur.",
+};
+
+function getLevelSpeechRate(level) {
+  if (level === "A1" || level === "A2") return 0.75;
+  if (level === "C1") return 1.1;
+  return 1.0;
+}
+
 // ═══════════════════════════════════════════
 // YARDIMCI FONKSİYONLAR
 // ═══════════════════════════════════════════
@@ -222,6 +236,7 @@ async function generateStoryJSON(topic, level, pageCount, langCode) {
 Kullanıcının konusuna uygun, CEFR ${level} seviyesinde, ${langName} dilinde bir hikaye yazmalısın.
 
 ÖNEMLİ KURALLAR:
+- Dil seviyesi: ${level}. Bu seviye için kurallar: ${LEVEL_INSTRUCTIONS[level]}
 - Hikaye dili: ${langName} (tüm hikaye metinleri bu dilde olmalı)
 - Karakter tanımı (characterDescription) İNGİLİZCE olmalı (görsel üretim için)
 - Her sayfa için actionPrompt İNGİLİZCE olmalı (görsel üretim için)
@@ -1060,6 +1075,7 @@ ogrenciAd={ogrenciAd}
             <ExerciseSection
               storyData={storyData}
               lang={lang}
+              level={level}
               ogrenciAd={ogrenciAd}
             />
 
@@ -1268,7 +1284,7 @@ function PageCard({ page, index, voice, speed, level, lang, isStudentMode, hikay
     return new Promise((resolve) => {
       const utterance = new SpeechSynthesisUtterance(word);
       utterance.lang  = langObj?.tts || "tr-TR";
-      utterance.rate  = 0.7;
+      utterance.rate  = getLevelSpeechRate(level);
       utterance.onend   = resolve;
       utterance.onerror = resolve;
       speechSynthesis.speak(utterance);
@@ -1445,6 +1461,7 @@ function PageCard({ page, index, voice, speed, level, lang, isStudentMode, hikay
             vocabulary={page.vocabulary}
             voice={voice}
             lang={lang}
+            level={level}
             isStudentMode={isStudentMode}
           />
         </div>
@@ -1456,7 +1473,7 @@ function PageCard({ page, index, voice, speed, level, lang, isStudentMode, hikay
 // KELIME KARTLARI BİLEŞENİ
 // ═══════════════════════════════════════════
 
-function FlashcardDeck({ vocabulary, voice, lang, isStudentMode }) {
+function FlashcardDeck({ vocabulary, voice, lang, level, isStudentMode }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [learned, setLearned] = useState(new Set());
@@ -1502,7 +1519,7 @@ function FlashcardDeck({ vocabulary, voice, lang, isStudentMode }) {
       const langObj = LANGUAGES.find(l => l.code === lang);
       const utterance = new SpeechSynthesisUtterance(card.word);
       utterance.lang = langObj?.tts || "tr-TR";
-      utterance.rate = 0.7;
+      utterance.rate = getLevelSpeechRate(level);
       setAudioState("playing");
       await new Promise(r => { utterance.onend = r; utterance.onerror = r; speechSynthesis.speak(utterance); });
     }
@@ -1604,7 +1621,7 @@ function FlashcardDeck({ vocabulary, voice, lang, isStudentMode }) {
 // EGZERSİZ BÖLÜMÜ
 // ═══════════════════════════════════════════
 
-function ExerciseSection({ storyData, lang, ogrenciAd }) {
+function ExerciseSection({ storyData, lang, level, ogrenciAd }) {
   const [activeTab, setActiveTab] = useState("quiz");
   const [quizPuan, setQuizPuan] = useState(null);
   const [boslukPuan, setBoslukPuan] = useState(null);
@@ -1695,7 +1712,7 @@ function ExerciseSection({ storyData, lang, ogrenciAd }) {
           <>
             <div className={activeTab === "quiz" ? "" : "hidden"}><QuizSection quiz={storyData.quiz} hikayeKod={storyData?.kod || ""} hikayeBaslik={storyData?.title || ""} ogrenciAd={ogrenciAd} onBitti={(puan) => { setQuizPuan(puan); kontrolEt(puan, null, null); }} /></div>
 <div className={activeTab === "fill" ? "" : "hidden"}><FillSection items={storyData.fillInTheBlanks} hikayeKod={storyData?.kod || ""} hikayeBaslik={storyData?.title || ""} ogrenciAd={ogrenciAd} onBitti={(puan) => { setBoslukPuan(puan); kontrolEt(null, puan, null); }} /></div>
-<div className={activeTab === "match" ? "" : "hidden"}><MatchSection items={matchItems} lang={lang} hikayeKod={storyData?.kod || ""} hikayeBaslik={storyData?.title || ""} ogrenciAd={ogrenciAd} onBitti={() => { setEslestirmeBitti(true); kontrolEt(null, null, true); }} /></div>
+<div className={activeTab === "match" ? "" : "hidden"}><MatchSection items={matchItems} lang={lang} level={level} hikayeKod={storyData?.kod || ""} hikayeBaslik={storyData?.title || ""} ogrenciAd={ogrenciAd} onBitti={() => { setEslestirmeBitti(true); kontrolEt(null, null, true); }} /></div>
           </>
         )}
       </div>
@@ -1884,7 +1901,7 @@ function FillSection({ items, hikayeKod, hikayeBaslik, ogrenciAd, onBitti }) {
 
 // ─── Eşleştirme ───────────────────────────
 
-function MatchSection({ items, lang, hikayeKod, hikayeBaslik, ogrenciAd, onBitti }) {
+function MatchSection({ items, lang, level, hikayeKod, hikayeBaslik, ogrenciAd, onBitti }) {
   const [selected, setSelected] = useState(null); // index of selected audio card
   const [matched, setMatched]   = useState({});   // { index: word }
   const [wrong, setWrong]       = useState(null); // { index, word }
@@ -1914,7 +1931,7 @@ function MatchSection({ items, lang, hikayeKod, hikayeBaslik, ogrenciAd, onBitti
     const langObj = LANGUAGES.find(l => l.code === lang);
     const utterance = new SpeechSynthesisUtterance(word);
     utterance.lang = langObj?.tts || "tr-TR";
-    utterance.rate = 0.7;
+    utterance.rate = getLevelSpeechRate(level);
     utterance.onend   = () => setPlaying(null);
     utterance.onerror = () => setPlaying(null);
     speechSynthesis.speak(utterance);
