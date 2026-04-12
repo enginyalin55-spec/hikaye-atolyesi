@@ -1856,17 +1856,7 @@ function IstatistikSayfasi() {
 
   return (
     <div className="animate-fade-in space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-black text-gray-900">📊 İstatistikler</h2>
-        {seciliHikaye && (
-          <button
-            onClick={() => excelIndir(seciliHikaye, aktiviteler)}
-            className="bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold text-sm"
-          >
-            📥 Excel İndir
-          </button>
-        )}
-      </div>
+      <h2 className="text-2xl font-black text-gray-900">📊 İstatistikler</h2>
 
       {/* Hikaye Seçimi */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
@@ -1876,20 +1866,28 @@ function IstatistikSayfasi() {
         ) : (
           <div className="grid gap-2">
             {hikayeler.map(h => (
-              <button
-                key={h.id}
-                onClick={() => hikayeSec(h)}
-                className={`text-left p-4 rounded-xl border-2 transition-all ${
+              <div key={h.id} className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
                   seciliHikaye?.id === h.id
                     ? "border-indigo-400 bg-indigo-50"
                     : "border-gray-100 hover:border-indigo-200"
-                }`}
-              >
-                <p className="font-black text-gray-900">{h.title || h.baslik}</p>
-                <p className="text-xs text-gray-400 mt-1">
-                  {LANGUAGES.find(l => l.code === (h.lang || h.dil))?.label} · Seviye {h.level || h.seviye} · {new Date(h.created_at || h.olusturma_tarihi).toLocaleDateString("tr-TR")}
-                </p>
-              </button>
+                }`}>
+                  <button className="text-left flex-1" onClick={() => hikayeSec(h)}>
+                    <p className="font-black text-gray-900">{h.title || h.baslik}</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {LANGUAGES.find(l => l.code === (h.lang || h.dil))?.label} · Seviye {h.level || h.seviye} · {new Date(h.created_at || h.olusturma_tarihi).toLocaleDateString("tr-TR")}
+                    </p>
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const res = await fetch("/api/proxy", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({model:"aktivite-getir", payload:{kod: h.title || h.baslik}})});
+                      const data = await res.json();
+                      excelIndir(h, data || []);
+                    }}
+                    className="ml-3 bg-emerald-600 text-white px-3 py-2 rounded-xl font-bold text-xs flex-shrink-0"
+                  >
+                    📥 Excel
+                  </button>
+                </div>
             ))}
           </div>
         )}
