@@ -304,6 +304,7 @@ function App() {
   const [shareStatus, setShareStatus] = useState("idle"); // idle | preparing | done
   const [shareKod, setShareKod] = useState(null);
   const [shareProgress, setShareProgress] = useState("");
+  const [bitisTarihi, setBitisTarihi] = useState("");
   const [isStudentMode, setIsStudentMode] = useState(false);
   const [girisEkrani, setGirisEkrani] = useState(true);
   const [girisInput, setGirisInput] = useState("");
@@ -448,6 +449,16 @@ try {
     setKodError(null);
     try {
       const entry = await supabaseGet(kodInput.trim());
+      if (entry.bitis_tarihi) {
+        const bitis = new Date(entry.bitis_tarihi);
+        const bugun = new Date();
+        bugun.setHours(0, 0, 0, 0);
+        if (bitis < bugun) {
+          setKodError("Bu hikayenin erişim süresi dolmuştur.");
+          setKodLoading(false);
+          return;
+        }
+      }
       setStoryData(entry.data);
       setLevel(entry.level);
       setLang(entry.lang);
@@ -539,6 +550,7 @@ setGirisSaati(Date.now());
         lang,
         voice,
         speed,
+        bitis_tarihi: bitisTarihi || null,
         data: { ...storyData, pages }
       });
 
@@ -941,6 +953,16 @@ setGirisSaati(Date.now());
                   </button>
                 )}
                 {!isStudentMode && (
+                  <input
+                    type="date"
+                    value={bitisTarihi}
+                    onChange={e => setBitisTarihi(e.target.value)}
+                    min={new Date().toISOString().split("T")[0]}
+                    title="Bitiş tarihi (boş = süresiz)"
+                    className="border-2 border-orange-200 rounded-xl px-3 py-2 text-sm font-bold text-gray-600 bg-orange-50 focus:bg-white focus:border-orange-400 outline-none"
+                  />
+                )}
+                {!isStudentMode && (
                   <button
                     onClick={handleShare}
                     disabled={shareStatus === "preparing"}
@@ -1077,6 +1099,7 @@ function PageCard({ page, index, voice, speed, level, lang, isStudentMode, hikay
   const [audioState, setAudioState] = useState("idle");
   const [wordAudioState, setWordAudioState] = useState({});
   const [showVocab, setShowVocab] = useState(false);
+  const [showFlashcards, setShowFlashcards] = useState(false);
   const stopAudioRef = useRef(null);
 
   const handlePlayPage = async () => {
@@ -1245,14 +1268,22 @@ function PageCard({ page, index, voice, speed, level, lang, isStudentMode, hikay
             {page.text}
           </p>
 
-          {/* Kelime sözlüğü toggle */}
+          {/* Kelime sözlüğü + flashcard toggle */}
           {page.vocabulary && page.vocabulary.length > 0 && (
-            <button
-              onClick={() => setShowVocab(v => !v)}
-              className="self-start text-xs font-black text-indigo-400 hover:text-indigo-600 uppercase tracking-widest flex items-center gap-1 transition-colors"
-            >
-              📖 {showVocab ? "Sözlüğü Gizle" : `Kelimeler (${page.vocabulary.length})`}
-            </button>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={() => setShowVocab(v => !v)}
+                className="text-xs font-black text-indigo-400 hover:text-indigo-600 uppercase tracking-widest flex items-center gap-1 transition-colors"
+              >
+                📖 {showVocab ? "Sözlüğü Gizle" : `Kelimeler (${page.vocabulary.length})`}
+              </button>
+              <button
+                onClick={() => { setShowFlashcards(v => !v); setShowVocab(false); }}
+                className="text-xs font-black text-purple-400 hover:text-purple-600 uppercase tracking-widest flex items-center gap-1 transition-colors"
+              >
+                🃏 {showFlashcards ? "Kartları Gizle" : "Kelime Kartları"}
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -1279,7 +1310,7 @@ function PageCard({ page, index, voice, speed, level, lang, isStudentMode, hikay
                     </p>
                   )}
                 </div>
-                
+
                 {/* Kelime ses butonu */}
                 <button
                   onClick={() => handlePlayWord(v.word)}
@@ -1300,9 +1331,170 @@ function PageCard({ page, index, voice, speed, level, lang, isStudentMode, hikay
           </div>
         </div>
       )}
+
+      {/* Kelime Kartları */}
+      {showFlashcards && page.vocabulary && page.vocabulary.length > 0 && (
+        <div className="border-t border-purple-100 p-6 bg-purple-50">
+          <p className="text-xs font-black text-purple-400 uppercase tracking-widest mb-4">🃏 Kelime Kartları</p>
+          <FlashcardDeck
+            vocabulary={page.vocabulary}
+            voice={voice}
+            lang={lang}
+            isStudentMode={isStudentMode}
+          />
+        </div>
+      )}
     </div>
   );
 }
+// ═══════════════════════════════════════════
+// KELIME KARTLARI BİLEŞENİ
+// ═══════════════════════════════════════════
+
+function FlashcardDeck({ vocabulary, voice, lang, isStudentMode }) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [flipped, setFlipped] = useState(false);
+  const [learned, setLearned] = useState(new Set());
+  const [audioState, setAudioState] = useState("idle");
+
+  if (!vocabulary || vocabulary.length === 0) return null;
+
+  const remainingIndices = vocabulary.map((_, i) => i).filter(i => !learned.has(i));
+
+  if (remainingIndices.length === 0) {
+    return (
+      <div className="text-center py-8 space-y-3">
+        <p className="text-4xl">🎉</p>
+        <p className="font-black text-gray-800">Tüm kelimeleri öğrendin!</p>
+        <button
+          onClick={() => { setLearned(new Set()); setCurrentIndex(0); setFlipped(false); }}
+          className="bg-indigo-600 text-white px-5 py-2 rounded-xl font-black text-sm"
+        >
+          🔄 Baştan Başla
+        </button>
+      </div>
+    );
+  }
+
+  const safeIndex = currentIndex % remainingIndices.length;
+  const origIdx = remainingIndices[safeIndex];
+  const card = vocabulary[origIdx];
+
+  const handlePlay = async () => {
+    if (audioState !== "idle") return;
+    setAudioState("loading");
+    try {
+      if (isStudentMode && card.audioUrl) {
+        setAudioState("playing");
+        const audio = new Audio(card.audioUrl);
+        await new Promise(r => { audio.onended = r; audio.onerror = r; audio.play().catch(r); });
+      } else {
+        const { bytes, sampleRate } = await generateTTS(card.word, voice, "slow");
+        setAudioState("playing");
+        await playAudio(bytes, sampleRate);
+      }
+    } catch {
+      const langObj = LANGUAGES.find(l => l.code === lang);
+      const utterance = new SpeechSynthesisUtterance(card.word);
+      utterance.lang = langObj?.tts || "tr-TR";
+      utterance.rate = 0.7;
+      setAudioState("playing");
+      await new Promise(r => { utterance.onend = r; utterance.onerror = r; speechSynthesis.speak(utterance); });
+    }
+    setAudioState("idle");
+  };
+
+  const handleLearned = () => {
+    const newLearned = new Set(learned);
+    newLearned.add(origIdx);
+    setLearned(newLearned);
+    setFlipped(false);
+  };
+
+  const handleNext = () => {
+    setFlipped(false);
+    setCurrentIndex(prev => (prev + 1) % remainingIndices.length);
+  };
+
+  const handlePrev = () => {
+    setFlipped(false);
+    setCurrentIndex(prev => (prev - 1 + remainingIndices.length) % remainingIndices.length);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* İlerleme */}
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-black text-purple-500">
+          {safeIndex + 1} / {remainingIndices.length} kart · {learned.size} öğrenildi
+        </p>
+        <div className="flex gap-1 flex-wrap">
+          {vocabulary.map((_, i) => (
+            <div
+              key={i}
+              className={`w-2 h-2 rounded-full transition-all ${
+                learned.has(i) ? "bg-emerald-400" : i === origIdx ? "bg-purple-500" : "bg-purple-200"
+              }`}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Kart */}
+      <div className="flashcard-scene cursor-pointer select-none" onClick={() => setFlipped(f => !f)}>
+        <div className={`flashcard-inner ${flipped ? "flipped" : ""}`}>
+          {/* Ön yüz */}
+          <div className="flashcard-face bg-gradient-to-br from-indigo-500 to-purple-600 text-white rounded-2xl shadow-lg">
+            <p className="text-3xl font-black text-center">{card.word}</p>
+            {card.ipa && <p className="text-sm font-mono opacity-75">{card.ipa}</p>}
+            <p className="text-xs opacity-50 mt-1">👆 Çevirmek için tıkla</p>
+          </div>
+          {/* Arka yüz */}
+          <div className="flashcard-face flashcard-back bg-gradient-to-br from-emerald-400 to-teal-600 text-white rounded-2xl shadow-lg">
+            <p className="text-2xl font-black text-center">{card.translation}</p>
+            {card.word && <p className="text-sm opacity-70 mt-1">{card.word}</p>}
+          </div>
+        </div>
+      </div>
+
+      {/* Kontroller */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={handlePrev}
+          className="w-10 h-10 rounded-xl bg-white border border-purple-100 text-purple-600 font-black text-xl flex items-center justify-center hover:bg-purple-50 transition-all"
+        >
+          ‹
+        </button>
+        <div className="flex gap-2 flex-1 justify-center">
+          <button
+            onClick={handlePlay}
+            disabled={audioState !== "idle"}
+            className={`px-4 py-2 rounded-xl font-bold text-sm transition-all ${
+              audioState !== "idle"
+                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                : "bg-white border border-purple-200 text-purple-700 hover:bg-purple-50"
+            }`}
+          >
+            {audioState === "loading" ? "⏳" : audioState === "playing" ? "🔊" : "🔈"} Dinle
+          </button>
+          <button
+            onClick={handleLearned}
+            className="px-4 py-2 rounded-xl font-bold text-sm bg-emerald-500 text-white hover:bg-emerald-600 transition-all"
+          >
+            ✅ Öğrendim
+          </button>
+        </div>
+        <button
+          onClick={handleNext}
+          className="w-10 h-10 rounded-xl bg-white border border-purple-100 text-purple-600 font-black text-xl flex items-center justify-center hover:bg-purple-50 transition-all"
+        >
+          ›
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════
 // EGZERSİZ BÖLÜMÜ
 // ═══════════════════════════════════════════
