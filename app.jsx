@@ -1416,37 +1416,19 @@ function PageCard({ page, index, voice, speed, level, lang, isStudentMode, hikay
             {page.vocabulary.map((v, i) => (
               <div
                 key={i}
-                className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center justify-between gap-3"
+                className="bg-white rounded-2xl border border-gray-100 p-4"
               >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-black text-gray-900">{v.word}</span>
-                    {v.ipa && (
-                      <span className="text-xs text-gray-400 font-mono">{v.ipa}</span>
-                    )}
-                  </div>
-                  {v.translation && (
-                    <p className="text-sm text-indigo-600 font-medium mt-1">
-                      {lang === "tr" ? `≈ ${v.translation}` : v.translation}
-                    </p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-black text-gray-900">{v.word}</span>
+                  {v.ipa && (
+                    <span className="text-xs text-gray-400 font-mono">{v.ipa}</span>
                   )}
                 </div>
-
-                {/* Kelime ses butonu */}
-                <button
-                  onClick={() => handlePlayWord(v.word)}
-                  className={`flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
-                    wordAudioState[v.word] === "playing"
-                      ? "bg-emerald-100 text-emerald-600"
-                      : wordAudioState[v.word] === "loading"
-                      ? "bg-gray-100 text-gray-400"
-                      : "bg-indigo-50 text-indigo-500 hover:bg-indigo-100"
-                  }`}
-                >
-                  {wordAudioState[v.word] === "loading" ? (
-                    <span className="w-3 h-3 border-2 border-gray-300 border-t-gray-500 rounded-full spinner inline-block" />
-                  ) : wordAudioState[v.word] === "playing" ? "🔊" : "🔈"}
-                </button>
+                {v.translation && (
+                  <p className="text-sm text-indigo-600 font-medium mt-1">
+                    {lang === "tr" ? `≈ ${v.translation}` : v.translation}
+                  </p>
+                )}
               </div>
             ))}
           </div>
