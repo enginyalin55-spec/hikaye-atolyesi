@@ -1641,6 +1641,9 @@ function MatchSection({ items, lang, hikayeKod, hikayeBaslik, ogrenciAd, onBitti
   };
 
   const allDone = items.length > 0 && Object.keys(matched).length === items.length;
+  useEffect(() => {
+    if (allDone && onBitti) onBitti();
+  }, [allDone]);
 
   return (
     <div className="space-y-6">
