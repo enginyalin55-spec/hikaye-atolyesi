@@ -1721,7 +1721,73 @@ function MatchSection({ items, lang, hikayeKod, hikayeBaslik, ogrenciAd, onBitti
     </div>
   );
 }
+function excelIndir(hikaye, aktiviteler) {
+  const wb = XLSX.utils.book_new();
+  const baslik = hikaye.title || hikaye.baslik || "Hikaye";
 
+  // ── Sayfa 1: Özet ──
+  const ogrenciler = [...new Set(aktiviteler.filter(a => a.aksiyon === "hikaye_acildi").map(a => a.ogrenci_ad))];
+  const quizAktiviteleri = aktiviteler.filter(a => a.aksiyon === "quiz_cevaplandi");
+  const genelBasari = quizAktiviteleri.length > 0
+    ? Math.round((quizAktiviteleri.filter(a => a.detay?.dogru).length / quizAktiviteleri.length) * 100)
+    : 0;
+
+  const ozet = [
+    ["Hikaye Adı", baslik],
+    ["Dil", LANGUAGES.find(l => l.code === (hikaye.lang || hikaye.dil))?.label || ""],
+    ["Seviye", hikaye.level || hikaye.seviye],
+    ["Toplam Öğrenci", ogrenciler.length],
+    ["Genel Quiz Başarısı (%)", genelBasari],
+    ["Toplam Ses Dinleme", aktiviteler.filter(a => a.aksiyon === "ses_dinlendi").length],
+    ["Toplam Kelime Dinleme", aktiviteler.filter(a => a.aksiyon === "kelime_dinlendi").length],
+  ];
+  const ws1 = XLSX.utils.aoa_to_sheet(ozet);
+  XLSX.utils.book_append_sheet(wb, ws1, "Özet");
+
+  // ── Sayfa 2: Öğrenci Detayı ──
+  const detayBasliklar = ["Öğrenci", "Giriş Zamanı", "Ses Dinleme", "Kelime Dinleme", "Quiz Doğru", "Quiz Yanlış", "Quiz %", "Boşluk Doğru", "Boşluk Yanlış", "Eşleştirme", "Süre (dk)"];
+  const detayRows = ogrenciler.map(ad => {
+    const oA = aktiviteler.filter(a => a.ogrenci_ad === ad);
+    const giris = oA.find(a => a.aksiyon === "hikaye_acildi");
+    const oQuiz = oA.filter(a => a.aksiyon === "quiz_cevaplandi");
+    const quizDogru = oQuiz.filter(a => a.detay?.dogru).length;
+    const quizYanlis = oQuiz.length - quizDogru;
+    const quizYuzde = oQuiz.length > 0 ? Math.round((quizDogru / oQuiz.length) * 100) : 0;
+    const oBosluk = oA.filter(a => a.aksiyon === "bosluk_dolduruldu");
+    const boslukDogru = oBosluk.filter(a => a.detay?.dogru).length;
+    const boslukYanlis = oBosluk.length - boslukDogru;
+    const eslestirme = oA.filter(a => a.aksiyon === "eslestirme_tamamlandi").length > 0 ? "Tamamladı" : "Tamamlamadı";
+    const sure = oA.filter(a => a.aksiyon === "sure_gecirdi").reduce((acc, a) => acc + (a.detay?.dakika || 0), 0);
+    return [
+      ad,
+      giris ? new Date(giris.tarih).toLocaleString("tr-TR") : "",
+      oA.filter(a => a.aksiyon === "ses_dinlendi").length,
+      oA.filter(a => a.aksiyon === "kelime_dinlendi").length,
+      quizDogru, quizYanlis, quizYuzde,
+      boslukDogru, boslukYanlis,
+      eslestirme, sure
+    ];
+  });
+  const ws2 = XLSX.utils.aoa_to_sheet([detayBasliklar, ...detayRows]);
+  XLSX.utils.book_append_sheet(wb, ws2, "Öğrenci Detayı");
+
+  // ── Sayfa 3: Quiz Soruları ──
+  const quizSorular = hikaye.data?.quiz || [];
+  if (quizSorular.length > 0) {
+    const quizBasliklar = ["Soru", "Doğru Sayısı", "Yanlış Sayısı", "Toplam Cevap", "Başarı %"];
+    const quizRows = quizSorular.map((soru, i) => {
+      const cevaplar = quizAktiviteleri.filter(a => a.detay?.soru === i);
+      const dogru = cevaplar.filter(a => a.detay?.dogru).length;
+      const yanlis = cevaplar.length - dogru;
+      const basari = cevaplar.length > 0 ? Math.round((dogru / cevaplar.length) * 100) : 0;
+      return [soru.question, dogru, yanlis, cevaplar.length, basari];
+    });
+    const ws3 = XLSX.utils.aoa_to_sheet([quizBasliklar, ...quizRows]);
+    XLSX.utils.book_append_sheet(wb, ws3, "Quiz Soruları");
+  }
+
+  XLSX.writeFile(wb, `${baslik}_istatistik.xlsx`);
+}
 // ═══════════════════════════════════════════
 // İSTATİSTİK SAYFASI
 // ═══════════════════════════════════════════
@@ -1790,7 +1856,17 @@ function IstatistikSayfasi() {
 
   return (
     <div className="animate-fade-in space-y-6">
-      <h2 className="text-2xl font-black text-gray-900">📊 İstatistikler</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-black text-gray-900">📊 İstatistikler</h2>
+        {seciliHikaye && (
+          <button
+            onClick={() => excelIndir(seciliHikaye, aktiviteler)}
+            className="bg-emerald-600 text-white px-4 py-2 rounded-xl font-bold text-sm"
+          >
+            📥 Excel İndir
+          </button>
+        )}
+      </div>
 
       {/* Hikaye Seçimi */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
