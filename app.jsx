@@ -1597,8 +1597,11 @@ function MatchSection({ items, lang, hikayeKod, hikayeBaslik, ogrenciAd, onBitti
 
   const shuffle = () => setShuffled([...items.map(it => it.word)].sort(() => Math.random() - 0.5));
 
+  const initialized = useRef(false);
   useEffect(() => {
     if (!items || items.length === 0) return;
+    if (initialized.current) return;
+    initialized.current = true;
     shuffle();
     setSelected(null);
     setMatched({});
