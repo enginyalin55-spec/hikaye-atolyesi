@@ -1505,6 +1505,7 @@ function MatchSection({ items, lang, hikayeKod, hikayeBaslik, ogrenciAd }) {
   const [wrong, setWrong]       = useState(null); // { index, word }
   const [shuffled, setShuffled] = useState([]);
   const [playing, setPlaying]   = useState(null); // index currently playing
+  const [denemeSayisi, setDenemeSayisi] = useState({});
 
   const shuffle = () => setShuffled([...items.map(it => it.word)].sort(() => Math.random() - 0.5));
 
@@ -1538,9 +1539,12 @@ function MatchSection({ items, lang, hikayeKod, hikayeBaslik, ogrenciAd }) {
     const isCorrect = items[selected].word === word;
     if (isCorrect) {
       setMatched(prev => ({ ...prev, [selected]: word }));
+      aktiviteKaydet(hikayeKod, hikayeBaslik, ogrenciAd, "eslestirme_eslesme", { kelime: items[selected].word, dogru: true, deneme: (denemeSayisi[selected] || 0) + 1 });
       setSelected(null);
     } else {
       setWrong({ index: selected, word });
+      setDenemeSayisi(prev => ({ ...prev, [selected]: (prev[selected] || 0) + 1 }));
+      aktiviteKaydet(hikayeKod, hikayeBaslik, ogrenciAd, "eslestirme_eslesme", { kelime: items[selected].word, yanlis_secilen: word, dogru: false, deneme: (denemeSayisi[selected] || 0) + 1 });
       setTimeout(() => setWrong(null), 800);
     }
   };
@@ -1903,6 +1907,26 @@ function IstatistikSayfasi() {
                                 <p className="text-xs text-emerald-600 font-bold">✅ Eşleştirmeyi tamamladı</p>
                               ) : (
                                 <p className="text-xs text-gray-400 font-bold">⏳ Eşleştirmeyi henüz tamamlamadı</p>
+                              )}
+                              {oAktivite.filter(a => a.aksiyon === "eslestirme_eslesme").length > 0 && (
+                                <div>
+                                  <p className="text-xs font-black text-gray-500 mb-1">🔗 Eşleştirme Detayı:</p>
+                                  <div className="space-y-1">
+                                    {[...new Set(oAktivite.filter(a => a.aksiyon === "eslestirme_eslesme").map(a => a.detay?.kelime))].map((kelime, i) => {
+                                      const kelimeAktiviteleri = oAktivite.filter(a => a.aksiyon === "eslestirme_eslesme" && a.detay?.kelime === kelime);
+                                      const dogru = kelimeAktiviteleri.find(a => a.detay?.dogru);
+                                      const yanlisSayisi = kelimeAktiviteleri.filter(a => !a.detay?.dogru).length;
+                                      return (
+                                        <div key={i} className="flex items-center gap-2">
+                                          <span>{dogru ? "✅" : "❌"}</span>
+                                          <span className="text-xs text-gray-700 font-bold">{kelime}</span>
+                                          {yanlisSayisi > 0 && <span className="text-xs text-red-400">({yanlisSayisi} yanlış deneme)</span>}
+                                          {dogru && <span className="text-xs text-emerald-500">{dogru.detay?.deneme}. denemede buldu</span>}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
                               )}
 
                               {/* Geçirilen süre */}
