@@ -309,6 +309,8 @@ function App() {
   const [girisInput, setGirisInput] = useState("");
   const [ogrenciAd, setOgrenciAd] = useState("");
   const [girisSaati, setGirisSaati] = useState(null);
+  const [tebrikGoster, setTebrikGoster] = useState(false);
+  const [toplamPuan, setToplamPuan] = useState(0);
   useEffect(() => {
     const handleUnload = () => {
       if (isStudentMode && girisSaati && storyData) {
@@ -1307,6 +1309,27 @@ function PageCard({ page, index, voice, speed, level, lang, isStudentMode, hikay
 
 function ExerciseSection({ storyData, lang, ogrenciAd }) {
   const [activeTab, setActiveTab] = useState("quiz");
+  const [quizPuan, setQuizPuan] = useState(null);
+  const [boslukPuan, setBoslukPuan] = useState(null);
+  const [eslestirmeBitti, setEslestirmeBitti] = useState(false);
+  const [tebrikGoster, setTebrikGoster] = useState(false);
+
+  const toplamPuan = (quizPuan || 0) + (boslukPuan || 0) + (eslestirmeBitti ? 10 : 0);
+  const maxPuan = (storyData.quiz?.length || 0) * 10 + (storyData.fillInTheBlanks?.length || 0) * 10 + 10;
+
+  const kontrolEt = (yeniQuiz, yeniBosluk, yeniEslestirme) => {
+    const q = yeniQuiz ?? quizPuan;
+    const b = yeniBosluk ?? boslukPuan;
+    const e = yeniEslestirme ?? eslestirmeBitti;
+    if (q !== null && b !== null && e) {
+      setTebrikGoster(true);
+      setTimeout(() => {
+        if (window.confetti) {
+          window.confetti({ particleCount: 200, spread: 120, origin: { y: 0.6 } });
+        }
+      }, 300);
+    }
+  };
 
   const matchItems = storyData.pages
     .flatMap(p => p.vocabulary || [])
@@ -1341,9 +1364,43 @@ function ExerciseSection({ storyData, lang, ogrenciAd }) {
       </div>
 
       <div className="p-6">
-        {activeTab === "quiz" && <QuizSection quiz={storyData.quiz} hikayeKod={storyData?.kod || ""} hikayeBaslik={storyData?.title || ""} ogrenciAd={ogrenciAd} />}
-{activeTab === "fill" && <FillSection items={storyData.fillInTheBlanks} hikayeKod={storyData?.kod || ""} hikayeBaslik={storyData?.title || ""} ogrenciAd={ogrenciAd} />}
-{activeTab === "match" && <MatchSection items={matchItems} lang={lang} hikayeKod={storyData?.kod || ""} hikayeBaslik={storyData?.title || ""} ogrenciAd={ogrenciAd} />}
+        {tebrikGoster ? (
+          <div className="text-center py-8 space-y-4">
+            <p className="text-5xl">🎉</p>
+            <h3 className="text-2xl font-black text-gray-900">Tebrikler!</h3>
+            <p className="text-gray-500 font-medium">Tüm alıştırmaları tamamladın!</p>
+            <div className="bg-indigo-50 rounded-2xl p-6 inline-block">
+              <p className="text-5xl font-black text-indigo-600">{toplamPuan}</p>
+              <p className="text-sm text-indigo-400 font-bold">/ {maxPuan} puan</p>
+            </div>
+            <div className="grid grid-cols-3 gap-3 mt-4">
+              <div className="bg-emerald-50 rounded-xl p-3 text-center">
+                <p className="text-xl font-black text-emerald-600">{quizPuan || 0}</p>
+                <p className="text-xs text-emerald-400 font-bold">Quiz</p>
+              </div>
+              <div className="bg-orange-50 rounded-xl p-3 text-center">
+                <p className="text-xl font-black text-orange-600">{boslukPuan || 0}</p>
+                <p className="text-xs text-orange-400 font-bold">Boşluk</p>
+              </div>
+              <div className="bg-violet-50 rounded-xl p-3 text-center">
+                <p className="text-xl font-black text-violet-600">{eslestirmeBitti ? 10 : 0}</p>
+                <p className="text-xs text-violet-400 font-bold">Eşleştirme</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setTebrikGoster(false)}
+              className="mt-4 bg-indigo-600 text-white px-6 py-3 rounded-xl font-black text-sm"
+            >
+              Tekrar Dene
+            </button>
+          </div>
+        ) : (
+          <>
+            {activeTab === "quiz" && <QuizSection quiz={storyData.quiz} hikayeKod={storyData?.kod || ""} hikayeBaslik={storyData?.title || ""} ogrenciAd={ogrenciAd} onBitti={(puan) => { setQuizPuan(puan); kontrolEt(puan, null, null); }} />}
+            {activeTab === "fill" && <FillSection items={storyData.fillInTheBlanks} hikayeKod={storyData?.kod || ""} hikayeBaslik={storyData?.title || ""} ogrenciAd={ogrenciAd} onBitti={(puan) => { setBoslukPuan(puan); kontrolEt(null, puan, null); }} />}
+            {activeTab === "match" && <MatchSection items={matchItems} lang={lang} hikayeKod={storyData?.kod || ""} hikayeBaslik={storyData?.title || ""} ogrenciAd={ogrenciAd} onBitti={() => { setEslestirmeBitti(true); kontrolEt(null, null, true); }} />}
+          </>
+        )}
       </div>
     </div>
   );
@@ -1351,7 +1408,7 @@ function ExerciseSection({ storyData, lang, ogrenciAd }) {
 
 // ─── Quiz ─────────────────────────────────
 
-function QuizSection({ quiz, hikayeKod, hikayeBaslik, ogrenciAd }) {
+function QuizSection({ quiz, hikayeKod, hikayeBaslik, ogrenciAd, onBitti }) {
   const [answers, setAnswers] = useState({});
   const [revealed, setRevealed] = useState(false);
 
@@ -1390,7 +1447,7 @@ function QuizSection({ quiz, hikayeKod, hikayeBaslik, ogrenciAd }) {
         </div>
       ))}
 
-      <div className="flex items-center justify-between pt-2">
+    <div className="flex items-center justify-between pt-2">
         {revealed && (
           <div className="text-sm font-black text-indigo-700">
             Sonuç: {score} / {quiz.length} doğru
@@ -1400,7 +1457,13 @@ function QuizSection({ quiz, hikayeKod, hikayeBaslik, ogrenciAd }) {
         <button
           onClick={() => {
             if (revealed) { setRevealed(false); setAnswers({}); }
-            else setRevealed(true);
+            else { 
+              setRevealed(true);
+              if (onBitti) {
+                const puan = quiz.filter((q, i) => answers[i] === q.answer).length * 10;
+                onBitti(puan);
+              }
+            }
           }}
           className="ml-auto bg-indigo-600 text-white px-6 py-3 rounded-xl font-black text-sm"
         >
@@ -1413,7 +1476,7 @@ function QuizSection({ quiz, hikayeKod, hikayeBaslik, ogrenciAd }) {
 
 // ─── Boşluk Doldurma ──────────────────────
 
-function FillSection({ items, hikayeKod, hikayeBaslik, ogrenciAd }) {
+function FillSection({ items, hikayeKod, hikayeBaslik, ogrenciAd, onBitti }) {
   const [inputs, setInputs]   = useState({});
   const [checked, setChecked] = useState({});
 
@@ -1425,7 +1488,12 @@ function FillSection({ items, hikayeKod, hikayeBaslik, ogrenciAd }) {
     const correct = items[i].answer.trim().toLowerCase();
     const isCorrect = userAnswer === correct;
     aktiviteKaydet(hikayeKod, hikayeBaslik, ogrenciAd, "bosluk_dolduruldu", { soru: i, yazilan: userAnswer, dogru: isCorrect, cevap: correct });
-    setChecked(prev => ({ ...prev, [i]: true }));
+    const yeniChecked = { ...checked, [i]: true };
+    setChecked(yeniChecked);
+    if (onBitti && Object.keys(yeniChecked).length === items.length) {
+      const dogru = items.filter((item, idx) => (inputs[idx] || "").trim().toLowerCase() === item.answer.trim().toLowerCase()).length;
+      onBitti(dogru * 10);
+    }
   };
 
   const handleReset = (i) => {
@@ -1519,7 +1587,7 @@ function FillSection({ items, hikayeKod, hikayeBaslik, ogrenciAd }) {
 
 // ─── Eşleştirme ───────────────────────────
 
-function MatchSection({ items, lang, hikayeKod, hikayeBaslik, ogrenciAd }) {
+function MatchSection({ items, lang, hikayeKod, hikayeBaslik, ogrenciAd, onBitti }) {
   const [selected, setSelected] = useState(null); // index of selected audio card
   const [matched, setMatched]   = useState({});   // { index: word }
   const [wrong, setWrong]       = useState(null); // { index, word }
@@ -2255,8 +2323,8 @@ function matchRight(j) {
     mDone[mSel] = j;
     mSel = null;
     if (Object.keys(mDone).length === mTotal) {
-      document.getElementById('match-ok').style.display = 'block';
-    aktiviteKaydet(hikayeKod, hikayeBaslik, ogrenciAd, "eslestirme_tamamlandi", { toplam: mTotal });
+      aktiviteKaydet(hikayeKod, hikayeBaslik, ogrenciAd, "eslestirme_tamamlandi", { toplam: mTotal });
+      if (onBitti) onBitti();
       }
   } else {
     var lBtn = document.getElementById('ml' + mSel);
