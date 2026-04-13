@@ -115,6 +115,12 @@ export default async function handler(req, res) {
     }
   }
 
+  // ── Şifre Kontrol ───────────────────────
+  if (model === "sifre-kontrol") {
+    const ok = payload.sifre === process.env.OGRETMEN_SIFRE;
+    return res.status(200).json({ ok });
+  }
+
   // ── Kütüphane: Kaydet ───────────────────
   if (model === "kutuphane-save") {
     try {

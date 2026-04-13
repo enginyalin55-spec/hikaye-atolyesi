@@ -1,7 +1,6 @@
 // ═══════════════════════════════════════════
 // API AYARLARI — kendi Gemini key'ini buraya yaz
 // ═══════════════════════════════════════════
-const OGRETMEN_SIFRE = "Yalin.Yasemin1113";
 const GEMINI_URL = "/api/proxy";
 const IMAGEN_URL = "/api/proxy";
 const TTS_URL    = "/api/proxy";
@@ -338,6 +337,7 @@ function App() {
     return () => window.removeEventListener("beforeunload", handleUnload);
   }, [isStudentMode, girisSaati, storyData, ogrenciAd]);
   const [girisHata, setGirisHata] = useState(null);
+  const [girisLoading, setGirisLoading] = useState(false);
 
   useEffect(() => {
     const yukle = async () => {
@@ -660,22 +660,33 @@ setGirisSaati(Date.now());
                   placeholder="Şifre"
                   value={girisInput}
                   onChange={e => { setGirisInput(e.target.value); setGirisHata(null); }}
-                  onKeyDown={e => {
+                  onKeyDown={async e => {
                     if (e.key === "Enter") {
-                      if (girisInput === OGRETMEN_SIFRE) { setGirisEkrani(false); setIsStudentMode(false); }
+                      if (girisLoading) return;
+                      setGirisLoading(true);
+                      const res = await fetch("/api/proxy", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: "sifre-kontrol", payload: { sifre: girisInput } }) });
+                      const { ok } = await res.json();
+                      if (ok) { setGirisEkrani(false); setIsStudentMode(false); }
                       else setGirisHata("Şifre yanlış!");
+                      setGirisLoading(false);
                     }
                   }}
                   className="flex-1 p-3 border-2 border-gray-100 rounded-2xl bg-gray-50 focus:bg-white focus:border-indigo-400 outline-none font-bold text-sm"
                 />
                 <button
-                  onClick={() => {
-                    if (girisInput === OGRETMEN_SIFRE) { setGirisEkrani(false); setIsStudentMode(false); }
+                  disabled={girisLoading}
+                  onClick={async () => {
+                    if (girisLoading) return;
+                    setGirisLoading(true);
+                    const res = await fetch("/api/proxy", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: "sifre-kontrol", payload: { sifre: girisInput } }) });
+                    const { ok } = await res.json();
+                    if (ok) { setGirisEkrani(false); setIsStudentMode(false); }
                     else setGirisHata("Şifre yanlış!");
+                    setGirisLoading(false);
                   }}
-                  className="bg-indigo-600 text-white px-4 py-3 rounded-2xl font-black text-sm"
+                  className="bg-indigo-600 text-white px-4 py-3 rounded-2xl font-black text-sm disabled:opacity-50"
                 >
-                  Gir
+                  {girisLoading ? "⏳" : "Gir"}
                 </button>
               </div>
               {girisHata && <p className="text-red-500 text-xs font-bold">{girisHata}</p>}
@@ -2400,23 +2411,14 @@ function handleDownload(storyData, level, lang) {
   const langLabel = LANGUAGES.find(l => l.code === lang)?.label || lang;
 
   // ── Sayfalar ──────────────────────────────
-  const pagesHtml = storyData.pages.map((p, i) => {
-    const vocabHtml = (p.vocabulary || []).map(v => `
-      <div class="vocab-item">
-        <span class="vocab-word">${v.word}</span>
-        <span class="vocab-ipa">${v.ipa || ""}</span>
-        <span class="vocab-tr">${v.translation || ""}</span>
-      </div>`).join("");
-    return `
+  const pagesHtml = storyData.pages.map((p, i) => `
     <div class="page-card">
       ${p.imageUrl ? `<img src="${p.imageUrl}" alt="Sayfa ${i+1}" class="page-img"/>` : ""}
       <div class="page-body">
         <div class="page-num">SAYFA ${i + 1}</div>
         <p class="page-text">${p.text}</p>
-        ${vocabHtml ? `<div class="vocab-box"><div class="vocab-title">📖 Kelimeler</div>${vocabHtml}</div>` : ""}
       </div>
-    </div>`;
-  }).join("");
+    </div>`).join("");
 
   // ── Quiz ──────────────────────────────────
   const quiz = storyData.quiz || [];
@@ -2497,13 +2499,6 @@ body{font-family:'Plus Jakarta Sans',sans-serif;background:#f8fafc;color:#1f2937
 .page-body{padding:24px;}
 .page-num{color:#6366f1;font-weight:800;font-size:.75rem;text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px;}
 .page-text{font-size:1.15rem;line-height:1.7;font-weight:500;}
-.vocab-box{margin-top:20px;padding-top:16px;border-top:2px dashed #e5e7eb;}
-.vocab-title{font-size:.7rem;font-weight:900;color:#6366f1;text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px;}
-.vocab-item{display:flex;align-items:baseline;gap:8px;padding:8px 0;border-bottom:1px solid #f3f4f6;}
-.vocab-item:last-child{border-bottom:none;}
-.vocab-word{font-weight:800;}
-.vocab-ipa{font-family:monospace;font-size:.8rem;color:#9ca3af;}
-.vocab-tr{color:#4f46e5;font-weight:600;margin-left:auto;}
 
 .section-title{font-size:1.4rem;font-weight:900;color:#1f2937;margin:36px 0 16px;padding-bottom:10px;border-bottom:3px solid #e5e7eb;}
 
