@@ -447,12 +447,21 @@ try {
   };
 
   // ── Kütüphaneden aç ──
-  const handleOpen = (entry) => {
-    setStoryData(entry.data);
-    setLevel(entry.level || entry.seviye);
-    setLang(entry.lang || entry.dil);
-    setVoice(entry.voice || entry.ses_tonu || "Kore");
-    setSpeed(entry.speed || entry.hiz || "normal");
+  const handleOpen = async (entry) => {
+    let fullEntry = entry;
+    if (!entry.data && entry.kod) {
+      try {
+        fullEntry = await supabaseGet(entry.kod);
+      } catch {
+        alert("Hikaye verisi yüklenemedi.");
+        return;
+      }
+    }
+    setStoryData(fullEntry.data);
+    setLevel(fullEntry.level || fullEntry.seviye);
+    setLang(fullEntry.lang || fullEntry.dil);
+    setVoice(fullEntry.voice || fullEntry.ses_tonu || "Kore");
+    setSpeed(fullEntry.speed || fullEntry.hiz || "normal");
     setStatus("preview");
     setIsStudentMode(false);
   };
