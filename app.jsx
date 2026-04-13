@@ -1228,7 +1228,6 @@ function ShareModal({ onConfirm, onCancel }) {
 function PageCard({ page, index, voice, speed, level, lang, isStudentMode, hikayeKod, hikayeBaslik, ogrenciAd }) {
   const [audioState, setAudioState] = useState("idle");
   const [wordAudioState, setWordAudioState] = useState({});
-  const [showVocab, setShowVocab] = useState(false);
   const [showFlashcards, setShowFlashcards] = useState(false);
   const stopAudioRef = useRef(null);
 
@@ -1398,17 +1397,11 @@ function PageCard({ page, index, voice, speed, level, lang, isStudentMode, hikay
             {page.text}
           </p>
 
-          {/* Kelime sözlüğü + flashcard toggle */}
+          {/* Flashcard toggle */}
           {page.vocabulary && page.vocabulary.length > 0 && (
             <div className="flex flex-wrap gap-3">
               <button
-                onClick={() => setShowVocab(v => !v)}
-                className="text-xs font-black text-indigo-400 hover:text-indigo-600 uppercase tracking-widest flex items-center gap-1 transition-colors"
-              >
-                📖 {showVocab ? "Sözlüğü Gizle" : `Kelimeler (${page.vocabulary.length})`}
-              </button>
-              <button
-                onClick={() => { setShowFlashcards(v => !v); setShowVocab(false); }}
+                onClick={() => setShowFlashcards(v => !v)}
                 className="text-xs font-black text-purple-400 hover:text-purple-600 uppercase tracking-widest flex items-center gap-1 transition-colors"
               >
                 🃏 {showFlashcards ? "Kartları Gizle" : "Kelime Kartları"}
@@ -1417,32 +1410,6 @@ function PageCard({ page, index, voice, speed, level, lang, isStudentMode, hikay
           )}
         </div>
       </div>
-
-      {/* Kelime Sözlüğü */}
-      {showVocab && page.vocabulary && (
-        <div className="border-t border-gray-100 p-6 bg-slate-50">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {page.vocabulary.map((v, i) => (
-              <div
-                key={i}
-                className="bg-white rounded-2xl border border-gray-100 p-4"
-              >
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-black text-gray-900">{v.word}</span>
-                  {v.ipa && (
-                    <span className="text-xs text-gray-400 font-mono">{v.ipa}</span>
-                  )}
-                </div>
-                {v.translation && (
-                  <p className="text-sm text-indigo-600 font-medium mt-1">
-                    {lang === "tr" ? `≈ ${v.translation}` : v.translation}
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Kelime Kartları */}
       {showFlashcards && page.vocabulary && page.vocabulary.length > 0 && (
