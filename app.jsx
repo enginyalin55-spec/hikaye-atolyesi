@@ -2089,7 +2089,9 @@ function MatchSection({ items, lang, level, hikayeKod, hikayeBaslik, ogrenciAd, 
 
   const allDone = items.length > 0 && Object.keys(matched).length === items.length;
   useEffect(() => {
-    if (allDone && onBitti) onBitti();
+    if (!allDone) return;
+    aktiviteKaydet(hikayeKod, hikayeBaslik, ogrenciAd, "eslestirme_tamamlandi", { toplam: items.length });
+    if (onBitti) onBitti();
   }, [allDone]);
 
   return (
