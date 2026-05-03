@@ -2671,6 +2671,7 @@ function IstatistikSayfasi() {
   const sinifliLevelGruplari  = buildLevelGruplari(sinifliOgrenciler);
   const sinifsizLevelGruplari = buildLevelGruplari(sinifsizOgrenciler);
 
+  // CEFR sırasıyla level grupları (Sınıf Dışı için)
   const buildLevelItems = (gruplari) => [
     ...CEFR_ORDER.flatMap(lvl => [
       ...(gruplari[lvl]?.length > 0 ? [{ _h: "level", level: lvl }] : []),
@@ -2681,9 +2682,25 @@ function IstatistikSayfasi() {
       : []),
   ];
 
+  // Son etkinlik tarihine göre sıralı level grupları (Sınıf Öğrencileri için)
+  const buildLevelItemsByDate = (gruplari) => {
+    const allLevels = [
+      ...CEFR_ORDER.filter(lvl => gruplari[lvl]?.length > 0),
+      ...(gruplari[null]?.length > 0 ? [null] : []),
+    ].sort((a, b) => {
+      const aDate = (gruplari[a] || []).reduce((m, o) => (o.sonTarih > m ? o.sonTarih : m), "");
+      const bDate = (gruplari[b] || []).reduce((m, o) => (o.sonTarih > m ? o.sonTarih : m), "");
+      return bDate.localeCompare(aDate);
+    });
+    return allLevels.flatMap(lvl => [
+      { _h: "level", level: lvl },
+      ...(gruplari[lvl] || []),
+    ]);
+  };
+
   const orderedOgrenciler = [
     ...(sinifliOgrenciler.length > 0 ? [{ _h: "sinifli" }] : []),
-    ...buildLevelItems(sinifliLevelGruplari),
+    ...buildLevelItemsByDate(sinifliLevelGruplari),
     ...(sinifsizOgrenciler.length > 0 ? [{ _h: "sinifsiz" }] : []),
     ...buildLevelItems(sinifsizLevelGruplari),
   ];
