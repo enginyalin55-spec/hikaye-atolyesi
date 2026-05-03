@@ -2465,6 +2465,12 @@ function SinifYonetimiSayfasi() {
   );
 }
 
+function sonCevapPerSoru(records) {
+  const map = {};
+  records.forEach(a => { map[a.detay?.soru ?? 0] = a; });
+  return Object.values(map);
+}
+
 function eslestirmeTamamlandi(aktiviteler) {
   if (aktiviteler.some(a => a.aksiyon === "eslestirme_tamamlandi")) return true;
   const eslesmeler = aktiviteler.filter(a => a.aksiyon === "eslestirme_eslesme");
@@ -2908,7 +2914,7 @@ function IstatistikSayfasi() {
                   <div className="grid gap-2">
                     {ogrenciler.map(ad => {
                       const oAktivite = aktiviteler.filter(a => a.ogrenci_ad === ad);
-                      const oQuiz = oAktivite.filter(a => a.aksiyon === "quiz_cevaplandi");
+                      const oQuiz = sonCevapPerSoru(oAktivite.filter(a => a.aksiyon === "quiz_cevaplandi"));
                       const oBasari = oQuiz.length > 0
                         ? Math.round((oQuiz.filter(a => a.detay?.dogru).length / oQuiz.length) * 100)
                         : null;
@@ -2926,8 +2932,8 @@ function IstatistikSayfasi() {
                           <div className="flex items-center justify-between">
                             <p className="font-black text-gray-900">{ad}</p>
                             <div className="flex gap-3 text-xs text-gray-400 font-bold">
-                              <span>🔊 {oAktivite.filter(a => a.aksiyon === "ses_dinlendi").length}</span>
-                              <span>📖 {oAktivite.filter(a => a.aksiyon === "kelime_dinlendi").length}</span>
+                              <span>🔊 {new Set(oAktivite.filter(a => a.aksiyon === "ses_dinlendi").map(a => a.detay?.sayfa)).size}</span>
+                              <span>📖 {new Set(oAktivite.filter(a => a.aksiyon === "kelime_dinlendi").map(a => a.detay?.kelime)).size}</span>
                               {oBasari !== null && (
                                 <span className={oBasari >= 70 ? "text-emerald-600" : "text-red-500"}>
                                   🎯 %{oBasari}
@@ -2952,9 +2958,9 @@ function IstatistikSayfasi() {
                                 <div>
                                   <p className="text-xs font-black text-gray-500 mb-1">🔊 Dinlediği Sayfalar:</p>
                                   <div className="flex flex-wrap gap-1">
-                                    {oAktivite.filter(a => a.aksiyon === "ses_dinlendi").map((a, i) => (
+                                    {[...new Set(oAktivite.filter(a => a.aksiyon === "ses_dinlendi").map(a => a.detay?.sayfa).filter(s => s != null))].map((sayfa, i) => (
                                       <span key={i} className="bg-emerald-100 text-emerald-700 text-xs font-bold px-2 py-1 rounded-lg">
-                                        Sayfa {a.detay?.sayfa}
+                                        Sayfa {sayfa}
                                       </span>
                                     ))}
                                   </div>
@@ -2966,9 +2972,9 @@ function IstatistikSayfasi() {
                                 <div>
                                   <p className="text-xs font-black text-gray-500 mb-1">📖 Dinlediği Kelimeler:</p>
                                   <div className="flex flex-wrap gap-1">
-                                    {oAktivite.filter(a => a.aksiyon === "kelime_dinlendi").map((a, i) => (
+                                    {[...new Set(oAktivite.filter(a => a.aksiyon === "kelime_dinlendi").map(a => a.detay?.kelime).filter(Boolean))].map((kelime, i) => (
                                       <span key={i} className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-1 rounded-lg">
-                                        {a.detay?.kelime}
+                                        {kelime}
                                       </span>
                                     ))}
                                   </div>
@@ -2998,7 +3004,7 @@ function IstatistikSayfasi() {
                                 <div>
                                   <p className="text-xs font-black text-gray-500 mb-1">✏️ Boşluk Doldurma:</p>
                                   <div className="space-y-1">
-                                    {oAktivite.filter(a => a.aksiyon === "bosluk_dolduruldu").map((a, i) => (
+                                    {sonCevapPerSoru(oAktivite.filter(a => a.aksiyon === "bosluk_dolduruldu")).map((a, i) => (
                                       <div key={i} className="flex items-start gap-2">
                                         <span>{a.detay?.dogru ? "✅" : "❌"}</span>
                                         <div>
@@ -3135,9 +3141,9 @@ function IstatistikSayfasi() {
                               })
                               .map(([baslik, satirlar]) => {
                               const hikayeAcik  = seciliHikayeBaslik === baslik;
-                              const oQuiz       = satirlar.filter(a => a.aksiyon === "quiz_cevaplandi");
-                              const bosluklar   = satirlar.filter(a => a.aksiyon === "bosluk_dolduruldu");
-                              const sesler      = satirlar.filter(a => a.aksiyon === "ses_dinlendi");
+                              const oQuiz       = sonCevapPerSoru(satirlar.filter(a => a.aksiyon === "quiz_cevaplandi"));
+                              const bosluklar   = sonCevapPerSoru(satirlar.filter(a => a.aksiyon === "bosluk_dolduruldu"));
+                              const sesler      = [...new Map(satirlar.filter(a => a.aksiyon === "ses_dinlendi").map(a => [a.detay?.sayfa, a])).values()];
                               const aktifSaniye = hesaplaAktifSure(satirlar);
                               const quizDogru   = oQuiz.filter(a => a.detay?.dogru).length;
                               const boslukDogru = bosluklar.filter(a => a.detay?.dogru).length;
@@ -3226,9 +3232,9 @@ function IstatistikSayfasi() {
                                         <div>
                                           <p className="text-xs font-black text-gray-500 mb-1">📖 Dinlediği Kelimeler:</p>
                                           <div className="flex flex-wrap gap-1">
-                                            {satirlar.filter(a => a.aksiyon === "kelime_dinlendi").map((a, i) => (
+                                            {[...new Set(satirlar.filter(a => a.aksiyon === "kelime_dinlendi").map(a => a.detay?.kelime).filter(Boolean))].map((kelime, i) => (
                                               <span key={i} className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-1 rounded-lg">
-                                                {a.detay?.kelime}
+                                                {kelime}
                                               </span>
                                             ))}
                                           </div>
