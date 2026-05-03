@@ -313,6 +313,7 @@ function App() {
   const [imageProgress, setImageProgress] = useState({ current: 0, total: 0 });
   const [error, setError]       = useState(null);
   const [library, setLibrary]   = useState([]);
+  const [kutuphaneLevel, setKutuphaneLevel] = useState("");
   const [kodInput, setKodInput] = useState("");
   const [kodLoading, setKodLoading] = useState(false);
   const [kodError, setKodError] = useState(null);
@@ -984,7 +985,7 @@ try {
 )}
         {status === "library" && (
           <div className="animate-fade-in space-y-4">
-            <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-4">
               <h2 className="text-2xl font-black text-gray-900">🗂️ Hikaye Kütüphanesi</h2>
               <button
                 onClick={() => setStatus("idle")}
@@ -994,6 +995,24 @@ try {
               </button>
             </div>
 
+            {library.length > 0 && (
+              <div className="flex gap-1.5 flex-wrap mb-2">
+                {["", "A1", "A2", "B1", "B2", "C1"].map(lvl => (
+                  <button
+                    key={lvl}
+                    onClick={() => setKutuphaneLevel(lvl)}
+                    className={`px-3 py-1 rounded-lg text-xs font-black transition-all ${
+                      kutuphaneLevel === lvl
+                        ? "bg-indigo-600 text-white shadow"
+                        : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                    }`}
+                  >
+                    {lvl === "" ? "Tümü" : lvl}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {library.length === 0 ? (
               <div className="text-center py-20 text-gray-400">
                 <p className="text-5xl mb-4">📭</p>
@@ -1002,7 +1021,9 @@ try {
               </div>
             ) : (
               <div className="grid gap-4">
-                {library.map(entry => (
+                {(kutuphaneLevel === "" ? library : library.filter(e => (e.level || e.seviye) === kutuphaneLevel)).length === 0 ? (
+                  <p className="text-center py-10 text-gray-400 font-bold">Bu seviyede hikaye yok.</p>
+                ) : (kutuphaneLevel === "" ? library : library.filter(e => (e.level || e.seviye) === kutuphaneLevel)).map(entry => (
                   <div
                     key={entry.id}
                     className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex items-center justify-between gap-4"
@@ -2420,6 +2441,8 @@ function IstatistikSayfasi() {
   const [ogrenciDetayListesi, setOgrenciDetayListesi] = useState([]);
   const [detayYukleniyor, setDetayYukleniyor] = useState(false);
   const [seciliHikayeBaslik, setSeciliHikayeBaslik] = useState(null);
+  const [secilenLevel, setSecilenLevel] = useState("");
+  const [sinifAdlariSet, setSinifAdlariSet] = useState(new Set());
 
   useEffect(() => {
     const yukle = async () => {
@@ -2442,13 +2465,36 @@ function IstatistikSayfasi() {
     const yukle = async () => {
       setOgrenciYukleniyor(true);
       try {
-        const res = await fetch("/api/proxy", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ model: "ogrenci-listele", payload: {} }),
-        });
-        const data = await res.json();
-        setOgrenciListesi(data || []);
+        const [ogrenciRes, siniflarRes] = await Promise.all([
+          fetch("/api/proxy", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model: "ogrenci-listele", payload: {} }),
+          }),
+          fetch("/api/proxy", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model: "sinif-listele", payload: {} }),
+          }),
+        ]);
+        const ogrenciData = await ogrenciRes.json();
+        const siniflarData = await siniflarRes.json();
+        setOgrenciListesi(ogrenciData || []);
+        if (siniflarData && siniflarData.length > 0) {
+          const sinifSonuclari = await Promise.all(
+            siniflarData.map(s =>
+              fetch("/api/proxy", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ model: "sinif-getir", payload: { sinif_id: s.id } }),
+              }).then(r => r.json())
+            )
+          );
+          const tumAdlar = sinifSonuclari
+            .flat()
+            .map(o => o.ogrenci_adi.toLocaleLowerCase("tr-TR").trim());
+          setSinifAdlariSet(new Set(tumAdlar));
+        }
       } catch {}
       setOgrenciYukleniyor(false);
     };
@@ -2531,6 +2577,44 @@ function IstatistikSayfasi() {
       .sort((a, b) => (b.sonTarih || "").localeCompare(a.sonTarih || ""));
   })();
 
+  const sinifliOgrenciler  = ogrenciOzet.filter(o => sinifAdlariSet.has(o.ad.toLocaleLowerCase("tr-TR").trim()));
+  const sinifsizOgrenciler = ogrenciOzet.filter(o => !sinifAdlariSet.has(o.ad.toLocaleLowerCase("tr-TR").trim()));
+
+  const CEFR_ORDER = ["A1", "A2", "B1", "B2", "C1"];
+
+  const buildLevelGruplari = (liste) => {
+    const groups = {};
+    liste.forEach(o => {
+      const sonKayit = ogrenciListesi
+        .filter(r => r.ogrenci_ad === o.ad)
+        .sort((a, b) => (b.tarih || "").localeCompare(a.tarih || ""))[0];
+      const level = hikayeler.find(h => h.title === sonKayit?.hikaye_baslik)?.level || null;
+      if (!groups[level]) groups[level] = [];
+      groups[level].push(o);
+    });
+    return groups;
+  };
+
+  const sinifliLevelGruplari  = buildLevelGruplari(sinifliOgrenciler);
+  const sinifsizLevelGruplari = buildLevelGruplari(sinifsizOgrenciler);
+
+  const buildLevelItems = (gruplari) => [
+    ...CEFR_ORDER.flatMap(lvl => [
+      ...(gruplari[lvl]?.length > 0 ? [{ _h: "level", level: lvl }] : []),
+      ...(gruplari[lvl] || []),
+    ]),
+    ...(gruplari[null]?.length > 0
+      ? [{ _h: "level", level: null }, ...gruplari[null]]
+      : []),
+  ];
+
+  const orderedOgrenciler = [
+    ...(sinifliOgrenciler.length > 0 ? [{ _h: "sinifli" }] : []),
+    ...buildLevelItems(sinifliLevelGruplari),
+    ...(sinifsizOgrenciler.length > 0 ? [{ _h: "sinifsiz" }] : []),
+    ...buildLevelItems(sinifsizLevelGruplari),
+  ];
+
   const hikayeGruplari = (() => {
     const map = {};
     ogrenciDetayListesi.forEach(a => {
@@ -2572,12 +2656,31 @@ function IstatistikSayfasi() {
         <>
       {/* Hikaye Seçimi */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-        <p className="text-xs font-black text-indigo-400 uppercase tracking-widest mb-3">Hikaye Seç</p>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-black text-indigo-400 uppercase tracking-widest">Hikaye Seç</p>
+          <div className="flex gap-1.5 flex-wrap justify-end">
+            {["", "A1", "A2", "B1", "B2", "C1"].map(lvl => (
+              <button
+                key={lvl}
+                onClick={() => { setSecilenLevel(lvl); setSeciliHikaye(null); }}
+                className={`px-3 py-1 rounded-lg text-xs font-black transition-all ${
+                  secilenLevel === lvl
+                    ? "bg-indigo-600 text-white shadow"
+                    : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                }`}
+              >
+                {lvl === "" ? "Tümü" : lvl}
+              </button>
+            ))}
+          </div>
+        </div>
         {hikayeler.length === 0 ? (
           <p className="text-gray-400 text-sm">Henüz kayıtlı hikaye yok.</p>
         ) : (
           <div className="grid gap-2">
-            {hikayeler.map(h => (
+            {(secilenLevel === "" ? hikayeler : hikayeler.filter(h => h.level === secilenLevel)).length === 0 ? (
+              <p className="text-gray-400 text-sm font-bold text-center py-4">Bu seviyede hikaye yok.</p>
+            ) : (secilenLevel === "" ? hikayeler : hikayeler.filter(h => h.level === secilenLevel)).map(h => (
               <div key={h.id} className={`flex items-center justify-between p-4 rounded-xl border-2 transition-all ${
                   seciliHikaye?.id === h.id
                     ? "border-indigo-400 bg-indigo-50"
@@ -2843,11 +2946,21 @@ function IstatistikSayfasi() {
             </div>
           ) : (
             <>
-              <p className="text-xs font-black text-indigo-400 uppercase tracking-widest">
-                {ogrenciOzet.length} Öğrenci
-              </p>
               <div className="grid gap-3">
-                {ogrenciOzet.map(o => {
+                {orderedOgrenciler.map((o) => {
+                  if (o._h === "sinifli") return (
+                    <p key="_sinifli" className="text-xs font-black text-indigo-400 uppercase tracking-widest">🏫 Sınıf Öğrencileri</p>
+                  );
+                  if (o._h === "sinifsiz") return (
+                    <p key="_sinifsiz" className="text-xs font-black text-gray-400 uppercase tracking-widest pt-3">👤 Sınıf Dışı Katılımcılar</p>
+                  );
+                  if (o._h === "level") return (
+                    <div key={`_lvl_${o.level}`} className="flex items-center gap-2 pt-1 pb-0.5">
+                      <span className={`${getLevelColor(o.level)} text-xs font-black px-2 py-0.5 rounded-lg`}>
+                        {o.level || "Seviye Belirsiz"}
+                      </span>
+                    </div>
+                  );
                   const acik = seciliOgrenciAd === o.ad;
                   return (
                     <div
