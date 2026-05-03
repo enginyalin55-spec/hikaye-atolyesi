@@ -2560,6 +2560,14 @@ function IstatistikSayfasi() {
     setYukleniyor(false);
   };
 
+  const normAd = (ad) =>
+    (ad || "").trim().toLocaleLowerCase("tr-TR").replace(/\s+/g, " ");
+
+  const displayAd = (normAdStr) =>
+    normAdStr.split(" ")
+      .map(w => w ? w.charAt(0).toLocaleUpperCase("tr-TR") + w.slice(1) : "")
+      .join(" ");
+
   const ogrenciSec = async (ad) => {
     if (seciliOgrenciAd === ad) {
       setSeciliOgrenciAd(null);
@@ -2571,13 +2579,24 @@ function IstatistikSayfasi() {
     setSeciliHikayeBaslik(null);
     setDetayYukleniyor(true);
     try {
-      const res = await fetch("/api/proxy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "aktivite-ogrenci-getir", payload: { ad } }),
-      });
-      const data = await res.json();
-      setOgrenciDetayListesi(data || []);
+      const variants = [...(variantMap[ad] || new Set([ad]))];
+      const results = await Promise.all(
+        variants.map(v =>
+          fetch("/api/proxy", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ model: "aktivite-ogrenci-getir", payload: { ad: v } }),
+          }).then(r => r.json())
+        )
+      );
+      const seen = new Set();
+      const merged = results.flat().filter(a => {
+        const key = `${a.ogrenci_ad}|${a.hikaye_baslik}|${a.aksiyon}|${a.tarih}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }).sort((a, b) => (a.tarih || "").localeCompare(b.tarih || ""));
+      setOgrenciDetayListesi(merged);
     } catch {}
     setDetayYukleniyor(false);
   };
@@ -2606,17 +2625,28 @@ function IstatistikSayfasi() {
     ? aktiviteler.filter(a => a.ogrenci_ad === seciliOgrenci)
     : [];
 
+  const variantMap = (() => {
+    const map = {};
+    ogrenciListesi.forEach(r => {
+      const key = normAd(r.ogrenci_ad);
+      if (!map[key]) map[key] = new Set();
+      map[key].add(r.ogrenci_ad);
+    });
+    return map;
+  })();
+
   const ogrenciOzet = (() => {
     const map = {};
     ogrenciListesi.forEach(r => {
-      if (!map[r.ogrenci_ad]) map[r.ogrenci_ad] = { hikayeler: new Set(), sonTarih: null };
-      map[r.ogrenci_ad].hikayeler.add(r.hikaye_baslik);
-      if (!map[r.ogrenci_ad].sonTarih || r.tarih > map[r.ogrenci_ad].sonTarih) {
-        map[r.ogrenci_ad].sonTarih = r.tarih;
+      const key = normAd(r.ogrenci_ad);
+      if (!map[key]) map[key] = { hikayeler: new Set(), sonTarih: null };
+      map[key].hikayeler.add(r.hikaye_baslik);
+      if (!map[key].sonTarih || r.tarih > map[key].sonTarih) {
+        map[key].sonTarih = r.tarih;
       }
     });
     return Object.entries(map)
-      .map(([ad, d]) => ({ ad, hikayeSayisi: d.hikayeler.size, sonTarih: d.sonTarih }))
+      .map(([ad, d]) => ({ ad, gorunumAd: displayAd(ad), hikayeSayisi: d.hikayeler.size, sonTarih: d.sonTarih }))
       .sort((a, b) => (b.sonTarih || "").localeCompare(a.sonTarih || ""));
   })();
 
@@ -2629,7 +2659,7 @@ function IstatistikSayfasi() {
     const groups = {};
     liste.forEach(o => {
       const sonKayit = ogrenciListesi
-        .filter(r => r.ogrenci_ad === o.ad)
+        .filter(r => normAd(r.ogrenci_ad) === o.ad)
         .sort((a, b) => (b.tarih || "").localeCompare(a.tarih || ""))[0];
       const level = hikayeler.find(h => h.title === sonKayit?.hikaye_baslik)?.level || null;
       if (!groups[level]) groups[level] = [];
@@ -3018,7 +3048,7 @@ function IstatistikSayfasi() {
                         className="w-full p-5 flex items-center justify-between gap-4 text-left"
                       >
                         <div>
-                          <p className="font-black text-gray-900 capitalize">{o.ad}</p>
+                          <p className="font-black text-gray-900">{o.gorunumAd}</p>
                           <p className="text-xs text-gray-400 font-medium mt-1">
                             📚 {o.hikayeSayisi} farklı hikaye
                           </p>
