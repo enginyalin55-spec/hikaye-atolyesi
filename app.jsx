@@ -2465,6 +2465,16 @@ function SinifYonetimiSayfasi() {
   );
 }
 
+function eslestirmeTamamlandi(aktiviteler) {
+  if (aktiviteler.some(a => a.aksiyon === "eslestirme_tamamlandi")) return true;
+  const eslesmeler = aktiviteler.filter(a => a.aksiyon === "eslestirme_eslesme");
+  if (eslesmeler.length === 0) return false;
+  const kelimeler = [...new Set(eslesmeler.map(a => a.detay?.kelime).filter(Boolean))];
+  return kelimeler.length > 0 && kelimeler.every(k =>
+    eslesmeler.some(a => a.detay?.kelime === k && a.detay?.dogru)
+  );
+}
+
 function hesaplaAktifSure(aktiviteler) {
   const sirali = [...aktiviteler]
     .filter(a => a.tarih)
@@ -3005,7 +3015,7 @@ function IstatistikSayfasi() {
                               )}
 
                               {/* Eşleştirme */}
-                              {oAktivite.filter(a => a.aksiyon === "eslestirme_tamamlandi").length > 0 ? (
+                              {eslestirmeTamamlandi(oAktivite) ? (
                                 <p className="text-xs text-emerald-600 font-bold">✅ Eşleştirmeyi tamamladı</p>
                               ) : (
                                 <p className="text-xs text-gray-400 font-bold">⏳ Eşleştirmeyi henüz tamamlamadı</p>
@@ -3262,7 +3272,7 @@ function IstatistikSayfasi() {
                                         </div>
                                       )}
 
-                                      {satirlar.filter(a => a.aksiyon === "eslestirme_tamamlandi").length > 0 ? (
+                                      {eslestirmeTamamlandi(satirlar) ? (
                                         <p className="text-xs text-emerald-600 font-bold">✅ Eşleştirmeyi tamamladı</p>
                                       ) : (
                                         <p className="text-xs text-gray-400 font-bold">⏳ Eşleştirmeyi henüz tamamlamadı</p>
