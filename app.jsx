@@ -366,41 +366,7 @@ function App() {
     const params = new URLSearchParams(window.location.search);
     const urlKod = params.get("kod");
     if (!urlKod) return;
-
-    const autoYukle = async () => {
-      setKodInput(urlKod.toUpperCase());
-      try {
-        const entry = await supabaseGet(urlKod.toUpperCase());
-        if (entry.bitis_tarihi) {
-          const bitis = new Date(entry.bitis_tarihi);
-          const bugun = new Date();
-          bugun.setHours(0, 0, 0, 0);
-          if (bitis < bugun) {
-            setKodError("Bu hikayenin erişim süresi dolmuştur.");
-            return;
-          }
-        }
-        if (entry.sinif_id) {
-          const res = await fetch("/api/proxy", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ model: "sinif-getir", payload: { sinif_id: entry.sinif_id } }),
-          });
-          const ogrenciler = await res.json();
-          setSinifOgrencileri(ogrenciler || []);
-          setBekleyenEntry(entry);
-          const kaydedilenAd = localStorage.getItem(`lastStudent_${entry.sinif_id}`);
-          const listede = (ogrenciler || []).find(o => o.ogrenci_adi === kaydedilenAd);
-          setOgrenciAd(listede ? kaydedilenAd : "");
-        } else {
-          setOgrenciAd("");
-          setBekleyenEntry(entry);
-        }
-      } catch {
-        setKodError("Geçersiz kod. Lütfen tekrar deneyin.");
-      }
-    };
-    autoYukle();
+    setKodInput(urlKod.toUpperCase());
   }, []);
 
   // ── Ana üretim fonksiyonu ──
