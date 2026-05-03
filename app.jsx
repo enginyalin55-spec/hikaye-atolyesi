@@ -1592,6 +1592,9 @@ function PageCard({ page, index, voice, speed, level, lang, isStudentMode, hikay
             lang={lang}
             level={level}
             isStudentMode={isStudentMode}
+            hikayeKod={hikayeKod}
+            hikayeBaslik={hikayeBaslik}
+            ogrenciAd={ogrenciAd}
           />
         </div>
       )}
@@ -1602,7 +1605,7 @@ function PageCard({ page, index, voice, speed, level, lang, isStudentMode, hikay
 // KELIME KARTLARI BİLEŞENİ
 // ═══════════════════════════════════════════
 
-function FlashcardDeck({ vocabulary, voice, lang, level, isStudentMode }) {
+function FlashcardDeck({ vocabulary, voice, lang, level, isStudentMode, hikayeKod, hikayeBaslik, ogrenciAd }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [learned, setLearned] = useState(new Set());
@@ -1652,6 +1655,7 @@ function FlashcardDeck({ vocabulary, voice, lang, level, isStudentMode }) {
       setAudioState("playing");
       await new Promise(r => { utterance.onend = r; utterance.onerror = r; speechSynthesis.speak(utterance); });
     }
+    if (isStudentMode) await aktiviteKaydet(hikayeKod, hikayeBaslik, ogrenciAd, "kelime_dinlendi", { kelime: card.word });
     setAudioState("idle");
   };
 
