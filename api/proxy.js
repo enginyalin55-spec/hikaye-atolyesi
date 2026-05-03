@@ -229,6 +229,179 @@ export default async function handler(req, res) {
     }
   }
 
+  // ── Öğrenci: Listele ───────────────────
+  if (model === "ogrenci-listele") {
+    try {
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/ogrenci_aktiviteleri?aksiyon=eq.hikaye_acildi&select=ogrenci_ad,hikaye_baslik,tarih&order=tarih.desc&limit=500`,
+        {
+          headers: {
+            "apikey": SUPABASE_KEY,
+            "Authorization": `Bearer ${SUPABASE_KEY}`
+          }
+        }
+      );
+      const data = await response.json();
+      return res.status(200).json(data);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── Öğrenci: Aktivitelerini Getir ──────
+  if (model === "aktivite-ogrenci-getir") {
+    try {
+      const ad = payload.ad;
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/ogrenci_aktiviteleri?ogrenci_ad=eq.${encodeURIComponent(ad)}&select=*&order=tarih.asc`,
+        {
+          headers: {
+            "apikey": SUPABASE_KEY,
+            "Authorization": `Bearer ${SUPABASE_KEY}`
+          }
+        }
+      );
+      const data = await response.json();
+      return res.status(200).json(data);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── Sınıf: Oluştur ─────────────────────
+  if (model === "sinif-olustur") {
+    try {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/siniflar`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_KEY,
+          "Authorization": `Bearer ${SUPABASE_KEY}`,
+          "Prefer": "return=representation"
+        },
+        body: JSON.stringify({ sinif_adi: payload.sinif_adi })
+      });
+      if (!response.ok) {
+        const err = await response.text();
+        return res.status(response.status).json({ error: err });
+      }
+      const data = await response.json();
+      return res.status(200).json(data[0]);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── Sınıf: Listele ──────────────────────
+  if (model === "sinif-listele") {
+    try {
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/siniflar?select=*&order=created_at.desc`,
+        {
+          headers: {
+            "apikey": SUPABASE_KEY,
+            "Authorization": `Bearer ${SUPABASE_KEY}`
+          }
+        }
+      );
+      const data = await response.json();
+      return res.status(200).json(data);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── Sınıf: Sil ──────────────────────────
+  if (model === "sinif-sil") {
+    try {
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/siniflar?id=eq.${payload.id}`,
+        {
+          method: "DELETE",
+          headers: {
+            "apikey": SUPABASE_KEY,
+            "Authorization": `Bearer ${SUPABASE_KEY}`
+          }
+        }
+      );
+      if (!response.ok) {
+        const err = await response.text();
+        return res.status(response.status).json({ error: err });
+      }
+      return res.status(200).json({ ok: true });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── Öğrenci: Ekle ───────────────────────
+  if (model === "ogrenci-ekle") {
+    try {
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/sinif_ogrencileri`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "apikey": SUPABASE_KEY,
+          "Authorization": `Bearer ${SUPABASE_KEY}`,
+          "Prefer": "return=representation"
+        },
+        body: JSON.stringify({ sinif_id: payload.sinif_id, ogrenci_adi: payload.ogrenci_adi })
+      });
+      if (!response.ok) {
+        const err = await response.text();
+        return res.status(response.status).json({ error: err });
+      }
+      const data = await response.json();
+      return res.status(200).json(data[0]);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── Öğrenci: Deaktif Et ─────────────────
+  if (model === "ogrenci-deaktif") {
+    try {
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/sinif_ogrencileri?id=eq.${payload.id}`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            "apikey": SUPABASE_KEY,
+            "Authorization": `Bearer ${SUPABASE_KEY}`
+          },
+          body: JSON.stringify({ aktif: false })
+        }
+      );
+      if (!response.ok) {
+        const err = await response.text();
+        return res.status(response.status).json({ error: err });
+      }
+      return res.status(200).json({ ok: true });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── Sınıf: Öğrencileri Getir ────────────
+  if (model === "sinif-getir") {
+    try {
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/sinif_ogrencileri?sinif_id=eq.${payload.sinif_id}&aktif=eq.true&select=*&order=ogrenci_adi.asc`,
+        {
+          headers: {
+            "apikey": SUPABASE_KEY,
+            "Authorization": `Bearer ${SUPABASE_KEY}`
+          }
+        }
+      );
+      const data = await response.json();
+      return res.status(200).json(data);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   // ── Gemini API ───────────────────────────
   if (!GEMINI_KEY) {
     return res.status(500).json({ error: "API key tanımlı değil" });

@@ -207,13 +207,14 @@ async function playAudio(bytes, sampleRate) {
 // ── Aktivite Kaydet ──────────────────────
 async function aktiviteKaydet(hikayeKod, hikayeBaslik, ogrenciAd, aksiyon, detay = {}) {
   if (!hikayeBaslik) return;
+  const adNorm = (ogrenciAd || "").trim().toLocaleLowerCase("tr-TR");
   try {
     await fetch("/api/proxy", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model: "aktivite-kaydet",
-        payload: { hikaye_kod: hikayeKod, hikaye_baslik: hikayeBaslik, ogrenci_ad: ogrenciAd, aksiyon, detay }
+        payload: { hikaye_kod: hikayeKod, hikaye_baslik: hikayeBaslik, ogrenci_ad: adNorm, aksiyon, detay }
       }),
     });
   } catch {
@@ -338,6 +339,8 @@ function App() {
   }, [isStudentMode, girisSaati, storyData, ogrenciAd]);
   const [girisHata, setGirisHata] = useState(null);
   const [girisLoading, setGirisLoading] = useState(false);
+  const [sinifOgrencileri, setSinifOgrencileri] = useState([]);
+  const [bekleyenEntry, setBekleyenEntry] = useState(null);
 
   useEffect(() => {
     const yukle = async () => {
@@ -468,9 +471,32 @@ try {
 
   // ── Kod ile hikaye aç (öğrenci) ──
   const handleKodGir = async () => {
-    if (!kodInput.trim() || !ogrenciAd.trim()) return;
+    if (!kodInput.trim()) return;
     setKodLoading(true);
     setKodError(null);
+
+    // Adım 2: kod doğrulandı, öğrenci listeden ismini seçti
+    if (bekleyenEntry) {
+      if (!ogrenciAd.trim()) {
+        setKodError("Lütfen listeden adınızı seçin.");
+        setKodLoading(false);
+        return;
+      }
+      setStoryData(bekleyenEntry.data);
+      setLevel(bekleyenEntry.level);
+      setLang(bekleyenEntry.lang);
+      setVoice(bekleyenEntry.voice || "Kore");
+      setSpeed(bekleyenEntry.speed || "normal");
+      setIsStudentMode(true);
+      setStatus("preview");
+      setGirisEkrani(false);
+      await aktiviteKaydet(kodInput.trim(), bekleyenEntry.title, ogrenciAd.trim(), "hikaye_acildi", {});
+      setGirisSaati(Date.now());
+      setKodLoading(false);
+      return;
+    }
+
+    // Adım 1: kodu doğrula
     try {
       const entry = await supabaseGet(kodInput.trim());
       if (entry.bitis_tarihi) {
@@ -483,15 +509,24 @@ try {
           return;
         }
       }
-      setStoryData(entry.data);
-      setLevel(entry.level);
-      setLang(entry.lang);
-      setVoice(entry.voice || "Kore");
-      setSpeed(entry.speed || "normal");
-      setIsStudentMode(true);
-      setStatus("preview");
-      await aktiviteKaydet(kodInput.trim(), entry.title, ogrenciAd.trim(), "hikaye_acildi", {});
-setGirisSaati(Date.now());
+      if (entry.sinif_id) {
+        // Sınıflı hikaye: öğrenci listesini çek, isim seçimini bekle
+        const res = await fetch("/api/proxy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "sinif-getir", payload: { sinif_id: entry.sinif_id } }),
+        });
+        const ogrenciler = await res.json();
+        setSinifOgrencileri(ogrenciler || []);
+        setBekleyenEntry(entry);
+        const kaydedilenAd = localStorage.getItem(`lastStudent_${entry.sinif_id}`);
+        const listede = (ogrenciler || []).find(o => o.ogrenci_adi === kaydedilenAd);
+        setOgrenciAd(listede ? kaydedilenAd : "");
+      } else {
+        // Sınıfsız hikaye: isim alanını göster, adım 2'yi bekle
+        setOgrenciAd("");
+        setBekleyenEntry(entry);
+      }
     } catch (err) {
       setKodError("Geçersiz kod. Lütfen tekrar deneyin.");
     }
@@ -499,7 +534,7 @@ setGirisSaati(Date.now());
   };
 
   // ── Paylaşıma hazırla ──
-  const handleShare = async (tarihiDegeri = null) => {
+  const handleShare = async (tarihiDegeri = null, sinifId = null) => {
     if (!storyData) return;
     setShareStatus("preparing");
     try {
@@ -575,6 +610,7 @@ setGirisSaati(Date.now());
         voice,
         speed,
         bitis_tarihi: tarihiDegeri || null,
+        sinif_id: sinifId ? parseInt(sinifId, 10) : null,
         data: { ...storyData, pages }
       });
 
@@ -593,7 +629,7 @@ setGirisSaati(Date.now());
       {/* PAYLAŞIM MODALI */}
       {showShareModal && (
         <ShareModal
-          onConfirm={(tarihi) => { setShowShareModal(false); handleShare(tarihi); }}
+          onConfirm={(tarihi, sinifId) => { setShowShareModal(false); handleShare(tarihi, sinifId); }}
           onCancel={() => setShowShareModal(false)}
         />
       )}
@@ -618,28 +654,43 @@ setGirisSaati(Date.now());
                   type="text"
                   placeholder="Hikaye kodu (HK-XXXX)"
                   value={kodInput}
-                  onChange={e => { setKodInput(e.target.value.toUpperCase()); setKodError(null); }}
+                  onChange={e => { setKodInput(e.target.value.toUpperCase()); setKodError(null); setSinifOgrencileri([]); setBekleyenEntry(null); setOgrenciAd(""); }}
                   onKeyDown={e => e.key === "Enter" && handleKodGir()}
                   className="flex-1 p-3 border-2 border-gray-100 rounded-2xl bg-gray-50 focus:bg-white focus:border-orange-400 outline-none font-bold text-sm"
                 />
                 <button
-                  onClick={async () => { if (!kodInput.trim() || !ogrenciAd.trim()) return; await handleKodGir(); if (!kodError) setGirisEkrani(false); }}
-                  disabled={kodLoading || !kodInput.trim()}
+                  onClick={() => handleKodGir()}
+                  disabled={kodLoading || !kodInput.trim() || (bekleyenEntry !== null && !ogrenciAd.trim())}
                   className="bg-orange-500 text-white px-4 py-3 rounded-2xl font-black text-sm disabled:opacity-50"
                 >
                   {kodLoading ? "⏳" : "Gir"}
                 </button>
-                
-
-                
               </div>
-              <input
-  type="text"
-  placeholder="Adınız Soyadınız"
-  value={ogrenciAd}
-  onChange={e => setOgrenciAd(e.target.value)}
-  className="w-full p-3 border-2 border-gray-100 rounded-2xl bg-gray-50 focus:bg-white focus:border-orange-400 outline-none font-bold text-sm"
-/>
+
+              {/* Durum 2a: sınıflı hikaye → dropdown */}
+              {bekleyenEntry !== null && sinifOgrencileri.length > 0 && (
+                <select
+                  value={ogrenciAd}
+                  onChange={e => { setOgrenciAd(e.target.value); if (e.target.value) localStorage.setItem(`lastStudent_${bekleyenEntry.sinif_id}`, e.target.value); }}
+                  className="w-full p-3 border-2 border-orange-200 rounded-2xl bg-orange-50 focus:bg-white focus:border-orange-400 outline-none font-bold text-sm"
+                >
+                  <option value="">— Adını seç —</option>
+                  {sinifOgrencileri.map(o => (
+                    <option key={o.id} value={o.ogrenci_adi}>{o.ogrenci_adi}</option>
+                  ))}
+                </select>
+              )}
+
+              {/* Durum 2b: sınıfsız hikaye → text input */}
+              {bekleyenEntry !== null && sinifOgrencileri.length === 0 && (
+                <input
+                  type="text"
+                  placeholder="Adınız Soyadınız"
+                  value={ogrenciAd}
+                  onChange={e => setOgrenciAd(e.target.value)}
+                  className="w-full p-3 border-2 border-gray-100 rounded-2xl bg-gray-50 focus:bg-white focus:border-orange-400 outline-none font-bold text-sm"
+                />
+              )}
               {kodError && <p className="text-red-500 text-xs font-bold">{kodError}</p>}
             </div>
 
@@ -719,6 +770,14 @@ setGirisSaati(Date.now());
     className="bg-violet-100 text-violet-700 px-4 py-2 rounded-xl font-bold text-sm"
   >
     📊 İstatistikler
+  </button>
+)}
+            {!isStudentMode && (
+  <button
+    onClick={() => setStatus("siniflar")}
+    className="bg-emerald-100 text-emerald-700 px-4 py-2 rounded-xl font-bold text-sm"
+  >
+    📋 Sınıflar
   </button>
 )}
           </div>
@@ -920,6 +979,9 @@ setGirisSaati(Date.now());
         {status === "istatistik" && !isStudentMode && (
   <IstatistikSayfasi />
 )}
+        {status === "siniflar" && !isStudentMode && (
+  <SinifYonetimiSayfasi />
+)}
         {status === "library" && (
           <div className="animate-fade-in space-y-4">
             <div className="flex items-center justify-between mb-6">
@@ -1025,6 +1087,8 @@ setGirisSaati(Date.now());
       setIsStudentMode(false);
       setKodInput("");
       setOgrenciAd("");
+      setSinifOgrencileri([]);
+      setBekleyenEntry(null);
     } else { 
       setStatus("idle"); 
       setShareStatus("idle"); 
@@ -1132,10 +1196,23 @@ ogrenciAd={ogrenciAd}
 function ShareModal({ onConfirm, onCancel }) {
   const [suresiz, setSuresiz] = useState(true);
   const [modalTarihi, setModalTarihi] = useState("");
+  const [siniflar, setSiniflar] = useState([]);
+  const [seciliSinifId, setSeciliSinifId] = useState("");
   const bugun = new Date().toISOString().split("T")[0];
 
+  useEffect(() => {
+    fetch("/api/proxy", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "sinif-listele", payload: {} }),
+    })
+      .then(r => r.json())
+      .then(data => setSiniflar(data || []))
+      .catch(() => {});
+  }, []);
+
   const handleBaslat = () => {
-    onConfirm(suresiz ? null : (modalTarihi || null));
+    onConfirm(suresiz ? null : (modalTarihi || null), seciliSinifId || null);
   };
 
   return (
@@ -1205,6 +1282,25 @@ function ShareModal({ onConfirm, onCancel }) {
               </p>
             )}
           </div>
+
+          {/* Sınıf Seçici */}
+          {siniflar.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs font-black text-gray-500 uppercase tracking-widest">
+                Sınıf (isteğe bağlı)
+              </p>
+              <select
+                value={seciliSinifId}
+                onChange={e => setSeciliSinifId(e.target.value)}
+                className="w-full border-2 border-gray-100 rounded-2xl px-4 py-3 text-sm font-bold text-gray-700 bg-gray-50 focus:bg-white focus:border-orange-400 outline-none transition-all"
+              >
+                <option value="">Sınıf seç (opsiyonel)</option>
+                {siniflar.map(s => (
+                  <option key={s.id} value={s.id}>{s.sinif_adi}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Butonlar */}
           <div className="flex gap-3 pt-1">
@@ -2072,6 +2168,242 @@ function excelIndir(hikaye, aktiviteler) {
   XLSX.writeFile(wb, `${baslik}_istatistik.xlsx`);
 }
 // ═══════════════════════════════════════════
+// SINIF YÖNETİMİ SAYFASI
+// ═══════════════════════════════════════════
+
+function SinifYonetimiSayfasi() {
+  const [siniflar,        setSiniflar       ] = useState([]);
+  const [seciliSinif,     setSeciliSinif    ] = useState(null);
+  const [ogrenciler,      setOgrenciler     ] = useState([]);
+  const [yeniSinifAdi,    setYeniSinifAdi   ] = useState("");
+  const [yeniOgrenciAdi,  setYeniOgrenciAdi ] = useState("");
+  const [sinifYukleniyor, setSinifYukleniyor] = useState(false);
+  const [ogrenciEkleniyor,setOgrenciEkleniyor] = useState(false);
+
+  // Sınıfları yükle
+  useEffect(() => {
+    sinifListele();
+  }, []);
+
+  const sinifListele = async () => {
+    setSinifYukleniyor(true);
+    try {
+      const res = await fetch("/api/proxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "sinif-listele", payload: {} }),
+      });
+      const data = await res.json();
+      setSiniflar(data || []);
+    } catch {}
+    setSinifYukleniyor(false);
+  };
+
+  const sinifOlustur = async () => {
+    if (!yeniSinifAdi.trim()) return;
+    try {
+      await fetch("/api/proxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "sinif-olustur", payload: { sinif_adi: yeniSinifAdi.trim() } }),
+      });
+      setYeniSinifAdi("");
+      await sinifListele();
+    } catch {}
+  };
+
+  const sinifSil = async (id) => {
+    try {
+      await fetch("/api/proxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "sinif-sil", payload: { id } }),
+      });
+      if (seciliSinif?.id === id) { setSeciliSinif(null); setOgrenciler([]); }
+      await sinifListele();
+    } catch {}
+  };
+
+  const sinifSec = async (sinif) => {
+    if (seciliSinif?.id === sinif.id) { setSeciliSinif(null); setOgrenciler([]); return; }
+    setSeciliSinif(sinif);
+    setYeniOgrenciAdi("");
+    await ogrenciListele(sinif.id);
+  };
+
+  const ogrenciListele = async (sinifId) => {
+    try {
+      const res = await fetch("/api/proxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "sinif-getir", payload: { sinif_id: sinifId } }),
+      });
+      const data = await res.json();
+      setOgrenciler(data || []);
+    } catch {}
+  };
+
+  const ogrenciEkle = async () => {
+    if (!yeniOgrenciAdi.trim() || !seciliSinif) return;
+    setOgrenciEkleniyor(true);
+    try {
+      await fetch("/api/proxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "ogrenci-ekle", payload: { sinif_id: seciliSinif.id, ogrenci_adi: yeniOgrenciAdi.trim() } }),
+      });
+      setYeniOgrenciAdi("");
+      await ogrenciListele(seciliSinif.id);
+    } catch {}
+    setOgrenciEkleniyor(false);
+  };
+
+  const ogrenciDeaktif = async (id) => {
+    try {
+      await fetch("/api/proxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "ogrenci-deaktif", payload: { id } }),
+      });
+      await ogrenciListele(seciliSinif.id);
+    } catch {}
+  };
+
+  return (
+    <div className="animate-fade-in space-y-6">
+      <h2 className="text-2xl font-black text-gray-900">📋 Sınıf Yönetimi</h2>
+
+      {/* Yeni Sınıf Oluştur */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
+        <p className="text-xs font-black text-indigo-400 uppercase tracking-widest mb-3">Yeni Sınıf</p>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            placeholder="Sınıf adı (örn: 7-A)"
+            value={yeniSinifAdi}
+            onChange={e => setYeniSinifAdi(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && sinifOlustur()}
+            className="flex-1 p-3 border-2 border-gray-100 rounded-xl bg-gray-50 focus:bg-white focus:border-indigo-400 outline-none font-bold text-sm"
+          />
+          <button
+            onClick={sinifOlustur}
+            disabled={!yeniSinifAdi.trim()}
+            className="bg-indigo-600 text-white px-5 py-3 rounded-xl font-black text-sm disabled:opacity-40"
+          >
+            + Oluştur
+          </button>
+        </div>
+      </div>
+
+      {/* Sınıf Listesi */}
+      <div className="space-y-3">
+        {sinifYukleniyor ? (
+          <div className="text-center py-10 text-gray-400 font-bold">Yükleniyor...</div>
+        ) : siniflar.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center">
+            <p className="text-4xl mb-3">🏫</p>
+            <p className="text-gray-400 font-bold">Henüz sınıf oluşturulmamış.</p>
+          </div>
+        ) : (
+          siniflar.map(sinif => {
+            const acik = seciliSinif?.id === sinif.id;
+            return (
+              <div
+                key={sinif.id}
+                className={`bg-white rounded-2xl border-2 shadow-sm transition-all ${acik ? "border-indigo-300" : "border-gray-100"}`}
+              >
+                {/* Sınıf Başlığı */}
+                <div className="flex items-center justify-between p-5">
+                  <button
+                    onClick={() => sinifSec(sinif)}
+                    className="flex items-center gap-3 text-left flex-1"
+                  >
+                    <span className="text-xl">🏫</span>
+                    <div>
+                      <p className="font-black text-gray-900">{sinif.sinif_adi}</p>
+                      <p className="text-xs text-gray-400 font-medium mt-0.5">
+                        {new Date(sinif.created_at).toLocaleDateString("tr-TR")}
+                      </p>
+                    </div>
+                    <span className="text-gray-300 font-black ml-2">{acik ? "▲" : "▼"}</span>
+                  </button>
+                  <button
+                    onClick={() => sinifSil(sinif.id)}
+                    className="bg-red-50 text-red-400 border border-red-100 px-3 py-2 rounded-xl font-bold text-xs ml-3 flex-shrink-0"
+                  >
+                    🗑️
+                  </button>
+                </div>
+
+                {/* Öğrenci Paneli */}
+                {acik && (
+                  <div className="border-t border-gray-100 px-5 pb-5 pt-4 space-y-4">
+
+                    {/* Öğrenci Ekle */}
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Öğrenci adı soyadı"
+                        value={yeniOgrenciAdi}
+                        onChange={e => setYeniOgrenciAdi(e.target.value)}
+                        onKeyDown={e => e.key === "Enter" && ogrenciEkle()}
+                        className="flex-1 p-2.5 border-2 border-gray-100 rounded-xl bg-gray-50 focus:bg-white focus:border-indigo-400 outline-none font-bold text-sm"
+                      />
+                      <button
+                        onClick={ogrenciEkle}
+                        disabled={!yeniOgrenciAdi.trim() || ogrenciEkleniyor}
+                        className="bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-black text-sm disabled:opacity-40"
+                      >
+                        {ogrenciEkleniyor ? "⏳" : "+ Ekle"}
+                      </button>
+                    </div>
+
+                    {/* Öğrenci Listesi */}
+                    {ogrenciler.length === 0 ? (
+                      <p className="text-sm text-gray-400 font-bold text-center py-2">
+                        Henüz öğrenci eklenmemiş.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        <p className="text-xs font-black text-gray-400 uppercase tracking-widest">
+                          {ogrenciler.length} Öğrenci
+                        </p>
+                        {ogrenciler.map(o => (
+                          <div
+                            key={o.id}
+                            className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3"
+                          >
+                            <p className="font-bold text-gray-800 text-sm">{o.ogrenci_adi}</p>
+                            <button
+                              onClick={() => ogrenciDeaktif(o.id)}
+                              className="text-xs text-gray-400 hover:text-red-500 font-bold transition-colors"
+                            >
+                              Kaldır
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+    </div>
+  );
+}
+
+function getLevelColor(level) {
+  if (level === "A1") return "bg-green-100 text-green-700";
+  if (level === "A2") return "bg-blue-100 text-blue-700";
+  if (level === "B1") return "bg-purple-100 text-purple-700";
+  if (level === "B2") return "bg-orange-100 text-orange-700";
+  return "bg-gray-100 text-gray-500";
+}
+
+// ═══════════════════════════════════════════
 // İSTATİSTİK SAYFASI
 // ═══════════════════════════════════════════
 
@@ -2081,6 +2413,13 @@ function IstatistikSayfasi() {
   const [aktiviteler, setAktiviteler] = useState([]);
   const [seciliOgrenci, setSeciliOgrenci] = useState(null);
   const [yukleniyor, setYukleniyor] = useState(false);
+  const [sekme, setSekme] = useState("hikayeler");
+  const [ogrenciListesi, setOgrenciListesi] = useState([]);
+  const [ogrenciYukleniyor, setOgrenciYukleniyor] = useState(false);
+  const [seciliOgrenciAd, setSeciliOgrenciAd] = useState(null);
+  const [ogrenciDetayListesi, setOgrenciDetayListesi] = useState([]);
+  const [detayYukleniyor, setDetayYukleniyor] = useState(false);
+  const [seciliHikayeBaslik, setSeciliHikayeBaslik] = useState(null);
 
   useEffect(() => {
     const yukle = async () => {
@@ -2097,6 +2436,25 @@ function IstatistikSayfasi() {
     yukle();
   }, []);
 
+  useEffect(() => {
+    if (sekme !== "ogrenciler") return;
+    if (ogrenciListesi.length > 0) return;
+    const yukle = async () => {
+      setOgrenciYukleniyor(true);
+      try {
+        const res = await fetch("/api/proxy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "ogrenci-listele", payload: {} }),
+        });
+        const data = await res.json();
+        setOgrenciListesi(data || []);
+      } catch {}
+      setOgrenciYukleniyor(false);
+    };
+    yukle();
+  }, [sekme]);
+
   const hikayeSec = async (hikaye) => {
     setSeciliHikaye(hikaye);
     setSeciliOgrenci(null);
@@ -2111,6 +2469,28 @@ function IstatistikSayfasi() {
       setAktiviteler(data || []);
     } catch {}
     setYukleniyor(false);
+  };
+
+  const ogrenciSec = async (ad) => {
+    if (seciliOgrenciAd === ad) {
+      setSeciliOgrenciAd(null);
+      setOgrenciDetayListesi([]);
+      setSeciliHikayeBaslik(null);
+      return;
+    }
+    setSeciliOgrenciAd(ad);
+    setSeciliHikayeBaslik(null);
+    setDetayYukleniyor(true);
+    try {
+      const res = await fetch("/api/proxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ model: "aktivite-ogrenci-getir", payload: { ad } }),
+      });
+      const data = await res.json();
+      setOgrenciDetayListesi(data || []);
+    } catch {}
+    setDetayYukleniyor(false);
   };
 
   // Özet hesapla
@@ -2137,10 +2517,59 @@ function IstatistikSayfasi() {
     ? aktiviteler.filter(a => a.ogrenci_ad === seciliOgrenci)
     : [];
 
+  const ogrenciOzet = (() => {
+    const map = {};
+    ogrenciListesi.forEach(r => {
+      if (!map[r.ogrenci_ad]) map[r.ogrenci_ad] = { hikayeler: new Set(), sonTarih: null };
+      map[r.ogrenci_ad].hikayeler.add(r.hikaye_baslik);
+      if (!map[r.ogrenci_ad].sonTarih || r.tarih > map[r.ogrenci_ad].sonTarih) {
+        map[r.ogrenci_ad].sonTarih = r.tarih;
+      }
+    });
+    return Object.entries(map)
+      .map(([ad, d]) => ({ ad, hikayeSayisi: d.hikayeler.size, sonTarih: d.sonTarih }))
+      .sort((a, b) => (b.sonTarih || "").localeCompare(a.sonTarih || ""));
+  })();
+
+  const hikayeGruplari = (() => {
+    const map = {};
+    ogrenciDetayListesi.forEach(a => {
+      if (!map[a.hikaye_baslik]) map[a.hikaye_baslik] = [];
+      map[a.hikaye_baslik].push(a);
+    });
+    return map;
+  })();
+
   return (
     <div className="animate-fade-in space-y-6">
       <h2 className="text-2xl font-black text-gray-900">📊 İstatistikler</h2>
 
+      {/* Sekmeler */}
+      <div className="flex gap-2">
+        <button
+          onClick={() => setSekme("hikayeler")}
+          className={`px-5 py-2 rounded-xl font-black text-sm transition-all ${
+            sekme === "hikayeler"
+              ? "bg-indigo-600 text-white shadow"
+              : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+          }`}
+        >
+          📖 Hikayeler
+        </button>
+        <button
+          onClick={() => setSekme("ogrenciler")}
+          className={`px-5 py-2 rounded-xl font-black text-sm transition-all ${
+            sekme === "ogrenciler"
+              ? "bg-indigo-600 text-white shadow"
+              : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+          }`}
+        >
+          👨‍🎓 Öğrenciler
+        </button>
+      </div>
+
+      {sekme === "hikayeler" && (
+        <>
       {/* Hikaye Seçimi */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
         <p className="text-xs font-black text-indigo-400 uppercase tracking-widest mb-3">Hikaye Seç</p>
@@ -2394,6 +2823,251 @@ function IstatistikSayfasi() {
                     })}
                   </div>
                 )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+        </>
+      )}
+
+      {sekme === "ogrenciler" && (
+        <div className="space-y-4">
+          {ogrenciYukleniyor ? (
+            <div className="text-center py-10 text-gray-400 font-bold">Yükleniyor...</div>
+          ) : ogrenciOzet.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-8 text-center">
+              <p className="text-4xl mb-3">👨‍🎓</p>
+              <p className="text-gray-400 font-bold">Henüz hiç öğrenci hikaye açmamış.</p>
+              <p className="text-xs text-gray-400 mt-1">Öğrenciler paylaşım kodu ile hikayeye girdiklerinde burada görünür.</p>
+            </div>
+          ) : (
+            <>
+              <p className="text-xs font-black text-indigo-400 uppercase tracking-widest">
+                {ogrenciOzet.length} Öğrenci
+              </p>
+              <div className="grid gap-3">
+                {ogrenciOzet.map(o => {
+                  const acik = seciliOgrenciAd === o.ad;
+                  return (
+                    <div
+                      key={o.ad}
+                      className={`bg-white rounded-2xl border-2 shadow-sm transition-all ${
+                        acik ? "border-indigo-300" : "border-gray-100"
+                      }`}
+                    >
+                      {/* Kart Başlığı — tıklanabilir */}
+                      <button
+                        onClick={() => ogrenciSec(o.ad)}
+                        className="w-full p-5 flex items-center justify-between gap-4 text-left"
+                      >
+                        <div>
+                          <p className="font-black text-gray-900 capitalize">{o.ad}</p>
+                          <p className="text-xs text-gray-400 font-medium mt-1">
+                            📚 {o.hikayeSayisi} farklı hikaye
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-3 flex-shrink-0">
+                          {o.sonTarih && (
+                            <p className="text-xs text-gray-400 font-bold">
+                              🕐 {new Date(o.sonTarih).toLocaleDateString("tr-TR")}
+                            </p>
+                          )}
+                          <span className="text-gray-300 font-black">{acik ? "▲" : "▼"}</span>
+                        </div>
+                      </button>
+
+                      {/* Detay — açıksa göster */}
+                      {acik && (
+                        <div className="border-t border-gray-100 px-5 pb-5 pt-4 space-y-3">
+                          {detayYukleniyor ? (
+                            <p className="text-sm text-gray-400 font-bold text-center py-4">Yükleniyor...</p>
+                          ) : Object.keys(hikayeGruplari).length === 0 ? (
+                            <p className="text-sm text-gray-400 font-bold text-center py-4">Veri bulunamadı.</p>
+                          ) : (
+                            Object.entries(hikayeGruplari).map(([baslik, satirlar]) => {
+                              const hikayeAcik  = seciliHikayeBaslik === baslik;
+                              const oQuiz       = satirlar.filter(a => a.aksiyon === "quiz_cevaplandi");
+                              const bosluklar   = satirlar.filter(a => a.aksiyon === "bosluk_dolduruldu");
+                              const sesler      = satirlar.filter(a => a.aksiyon === "ses_dinlendi");
+                              const sure        = satirlar.filter(a => a.aksiyon === "sure_gecirdi")
+                                                          .reduce((t, a) => t + (a.detay?.dakika || 0), 0);
+                              const quizDogru   = oQuiz.filter(a => a.detay?.dogru).length;
+                              const boslukDogru = bosluklar.filter(a => a.detay?.dogru).length;
+                              const hikayeKod   = satirlar[0]?.hikaye_kod;
+                              const hikayeInfo  = hikayeler.find(h => h.kod === hikayeKod) || hikayeler.find(h => h.title === baslik);
+                              const seviye      = hikayeInfo?.level || null;
+                              const genelDurum  = (() => {
+                                const scores = [];
+                                if (oQuiz.length > 0)     scores.push(quizDogru / oQuiz.length);
+                                if (bosluklar.length > 0) scores.push(boslukDogru / bosluklar.length);
+                                if (scores.length === 0) return null;
+                                const ort = scores.reduce((a, b) => a + b, 0) / scores.length;
+                                if (ort >= 0.8) return { label: "İyi",   emoji: "🟢", cls: "text-emerald-600" };
+                                if (ort >= 0.5) return { label: "Orta",  emoji: "🟡", cls: "text-amber-600"   };
+                                return             { label: "Zayıf", emoji: "🔴", cls: "text-red-500"     };
+                              })();
+                              return (
+                                <div key={baslik} className={`rounded-xl border-2 transition-all ${hikayeAcik ? "border-indigo-200 bg-indigo-50" : "border-gray-100 bg-gray-50"}`}>
+
+                                  {/* Hikaye Kart Başlığı */}
+                                  <button
+                                    onClick={() => setSeciliHikayeBaslik(hikayeAcik ? null : baslik)}
+                                    className="w-full p-4 text-left"
+                                  >
+                                    <div className="flex items-center justify-between gap-2">
+                                      <p className="font-black text-gray-800 text-sm flex items-center gap-2 flex-wrap">
+                                        {baslik}
+                                        {seviye && <span className={`${getLevelColor(seviye)} text-xs font-black px-2 py-0.5 rounded-lg`}>{seviye}</span>}
+                                      </p>
+                                      <span className="text-gray-400 font-black text-xs flex-shrink-0">{hikayeAcik ? "▲" : "▼"}</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-1.5 mt-2">
+                                      {oQuiz.length > 0 && (
+                                        <span className="bg-violet-100 text-violet-700 text-xs font-bold px-2 py-0.5 rounded-lg">
+                                          🎯 {quizDogru}/{oQuiz.length}
+                                        </span>
+                                      )}
+                                      {bosluklar.length > 0 && (
+                                        <span className="bg-orange-100 text-orange-700 text-xs font-bold px-2 py-0.5 rounded-lg">
+                                          ✏️ {boslukDogru}/{bosluklar.length}
+                                        </span>
+                                      )}
+                                      {sesler.length > 0 && (
+                                        <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-lg">
+                                          🔊 {sesler.length}
+                                        </span>
+                                      )}
+                                      {sure > 0 && (
+                                        <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-lg">
+                                          ⏱️ {sure}dk
+                                        </span>
+                                      )}
+                                    </div>
+                                  </button>
+
+                                  {/* Tam Detay */}
+                                  {hikayeAcik && (
+                                    <div className="border-t border-indigo-100 px-4 pb-4 pt-3 space-y-4">
+
+                                      {genelDurum && (
+                                        <p className={`text-xs font-black ${genelDurum.cls}`}>
+                                          {genelDurum.emoji} {genelDurum.label}
+                                        </p>
+                                      )}
+
+                                      {satirlar.filter(a => a.aksiyon === "hikaye_acildi").map((a, i) => (
+                                        <p key={i} className="text-xs text-gray-400">
+                                          🕐 Hikayeyi açtı: {new Date(a.tarih).toLocaleString("tr-TR")}
+                                        </p>
+                                      ))}
+
+                                      {sesler.length > 0 && (
+                                        <div>
+                                          <p className="text-xs font-black text-gray-500 mb-1">🔊 Dinlediği Sayfalar:</p>
+                                          <div className="flex flex-wrap gap-1">
+                                            {sesler.map((a, i) => (
+                                              <span key={i} className="bg-emerald-100 text-emerald-700 text-xs font-bold px-2 py-1 rounded-lg">
+                                                Sayfa {a.detay?.sayfa}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {satirlar.filter(a => a.aksiyon === "kelime_dinlendi").length > 0 && (
+                                        <div>
+                                          <p className="text-xs font-black text-gray-500 mb-1">📖 Dinlediği Kelimeler:</p>
+                                          <div className="flex flex-wrap gap-1">
+                                            {satirlar.filter(a => a.aksiyon === "kelime_dinlendi").map((a, i) => (
+                                              <span key={i} className="bg-indigo-100 text-indigo-700 text-xs font-bold px-2 py-1 rounded-lg">
+                                                {a.detay?.kelime}
+                                              </span>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {oQuiz.length > 0 && (
+                                        <div>
+                                          <p className="text-xs font-black text-gray-500 mb-1">🎯 Quiz Cevapları:</p>
+                                          <div className="space-y-1">
+                                            {oQuiz.map((a, i) => (
+                                              <div key={i} className="flex items-start gap-2">
+                                                <span>{a.detay?.dogru ? "✅" : "❌"}</span>
+                                                <div>
+                                                  <p className="text-xs text-gray-700 font-bold">Soru {(a.detay?.soru ?? 0) + 1}</p>
+                                                  {a.detay?.soruMetni && <p className="text-xs text-gray-400">{a.detay.soruMetni}</p>}
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {bosluklar.length > 0 && (
+                                        <div>
+                                          <p className="text-xs font-black text-gray-500 mb-1">✏️ Boşluk Doldurma:</p>
+                                          <div className="space-y-1">
+                                            {bosluklar.map((a, i) => (
+                                              <div key={i} className="flex items-start gap-2">
+                                                <span>{a.detay?.dogru ? "✅" : "❌"}</span>
+                                                <div>
+                                                  <p className="text-xs text-gray-700 font-bold">Soru {(a.detay?.soru ?? 0) + 1}</p>
+                                                  <p className="text-xs text-gray-400">
+                                                    Yazdı: "<span className={a.detay?.dogru ? "text-emerald-600" : "text-red-500"}>{a.detay?.yazilan}</span>"
+                                                    {!a.detay?.dogru && <span className="text-gray-400"> → Doğrusu: "{a.detay?.cevap}"</span>}
+                                                  </p>
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {satirlar.filter(a => a.aksiyon === "eslestirme_tamamlandi").length > 0 ? (
+                                        <p className="text-xs text-emerald-600 font-bold">✅ Eşleştirmeyi tamamladı</p>
+                                      ) : (
+                                        <p className="text-xs text-gray-400 font-bold">⏳ Eşleştirmeyi henüz tamamlamadı</p>
+                                      )}
+                                      {satirlar.filter(a => a.aksiyon === "eslestirme_eslesme").length > 0 && (
+                                        <div>
+                                          <p className="text-xs font-black text-gray-500 mb-1">🔗 Eşleştirme Detayı:</p>
+                                          <div className="space-y-1">
+                                            {[...new Set(satirlar.filter(a => a.aksiyon === "eslestirme_eslesme").map(a => a.detay?.kelime))].map((kelime, i) => {
+                                              const kelimeAktiviteleri = satirlar.filter(a => a.aksiyon === "eslestirme_eslesme" && a.detay?.kelime === kelime);
+                                              const dogru = kelimeAktiviteleri.find(a => a.detay?.dogru);
+                                              const yanlisSayisi = kelimeAktiviteleri.filter(a => !a.detay?.dogru).length;
+                                              return (
+                                                <div key={i} className="flex items-center gap-2">
+                                                  <span>{dogru ? "✅" : "❌"}</span>
+                                                  <span className="text-xs text-gray-700 font-bold">{kelime}</span>
+                                                  {yanlisSayisi > 0 && <span className="text-xs text-red-400">({yanlisSayisi} yanlış deneme)</span>}
+                                                  {dogru && <span className="text-xs text-emerald-500">{dogru.detay?.deneme}. denemede buldu</span>}
+                                                </div>
+                                              );
+                                            })}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {sure > 0 && (
+                                        <p className="text-xs text-blue-600 font-bold">
+                                          ⏱️ Hikayede geçirdiği süre: {sure} dakika
+                                        </p>
+                                      )}
+
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </>
           )}
