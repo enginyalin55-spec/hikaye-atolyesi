@@ -2459,6 +2459,28 @@ function SinifYonetimiSayfasi() {
   );
 }
 
+function hesaplaAktifSure(aktiviteler) {
+  const sirali = [...aktiviteler]
+    .filter(a => a.tarih)
+    .sort((a, b) => a.tarih.localeCompare(b.tarih));
+  if (sirali.length < 2) return 0;
+  let toplamSaniye = 0;
+  for (let i = 1; i < sirali.length; i++) {
+    const fark = (new Date(sirali[i].tarih) - new Date(sirali[i - 1].tarih)) / 1000;
+    if (fark > 0) toplamSaniye += Math.min(fark, 60);
+  }
+  return Math.round(toplamSaniye);
+}
+
+function formatSure(saniye) {
+  if (!saniye || saniye <= 0) return null;
+  const dk = Math.floor(saniye / 60);
+  const sn = saniye % 60;
+  if (dk === 0) return `${sn} sn`;
+  if (sn === 0) return `${dk} dk`;
+  return `${dk} dk ${sn} sn`;
+}
+
 function getLevelColor(level) {
   if (level === "A1") return "bg-green-100 text-green-700";
   if (level === "A2") return "bg-blue-100 text-blue-700";
@@ -2874,6 +2896,7 @@ function IstatistikSayfasi() {
                       const oBasari = oQuiz.length > 0
                         ? Math.round((oQuiz.filter(a => a.detay?.dogru).length / oQuiz.length) * 100)
                         : null;
+                      const oAktifSure = hesaplaAktifSure(oAktivite);
                       return (
                         <button
                           key={ad}
@@ -3003,9 +3026,9 @@ function IstatistikSayfasi() {
                               )}
 
                               {/* Geçirilen süre */}
-                              {oAktivite.filter(a => a.aksiyon === "sure_gecirdi").length > 0 && (
+                              {oAktifSure > 0 && (
                                 <p className="text-xs text-blue-600 font-bold">
-                                  ⏱️ Hikayede geçirdiği süre: {oAktivite.filter(a => a.aksiyon === "sure_gecirdi").reduce((acc, a) => acc + (a.detay?.dakika || 0), 0)} dakika
+                                  ⏱️ Tahmini aktif süre: {formatSure(oAktifSure)}
                                 </p>
                               )}
 
@@ -3099,8 +3122,7 @@ function IstatistikSayfasi() {
                               const oQuiz       = satirlar.filter(a => a.aksiyon === "quiz_cevaplandi");
                               const bosluklar   = satirlar.filter(a => a.aksiyon === "bosluk_dolduruldu");
                               const sesler      = satirlar.filter(a => a.aksiyon === "ses_dinlendi");
-                              const sure        = satirlar.filter(a => a.aksiyon === "sure_gecirdi")
-                                                          .reduce((t, a) => t + (a.detay?.dakika || 0), 0);
+                              const aktifSaniye = hesaplaAktifSure(satirlar);
                               const quizDogru   = oQuiz.filter(a => a.detay?.dogru).length;
                               const boslukDogru = bosluklar.filter(a => a.detay?.dogru).length;
                               const hikayeKod   = satirlar[0]?.hikaye_kod;
@@ -3147,9 +3169,9 @@ function IstatistikSayfasi() {
                                           🔊 {sesler.length}
                                         </span>
                                       )}
-                                      {sure > 0 && (
+                                      {aktifSaniye > 0 && (
                                         <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-lg">
-                                          ⏱️ {sure}dk
+                                          ⏱️ {formatSure(aktifSaniye)}
                                         </span>
                                       )}
                                     </div>
@@ -3260,9 +3282,9 @@ function IstatistikSayfasi() {
                                         </div>
                                       )}
 
-                                      {sure > 0 && (
+                                      {aktifSaniye > 0 && (
                                         <p className="text-xs text-blue-600 font-bold">
-                                          ⏱️ Hikayede geçirdiği süre: {sure} dakika
+                                          ⏱️ Tahmini aktif süre: {formatSure(aktifSaniye)}
                                         </p>
                                       )}
 
