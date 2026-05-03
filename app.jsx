@@ -3071,7 +3071,13 @@ function IstatistikSayfasi() {
                           ) : Object.keys(hikayeGruplari).length === 0 ? (
                             <p className="text-sm text-gray-400 font-bold text-center py-4">Veri bulunamadı.</p>
                           ) : (
-                            Object.entries(hikayeGruplari).map(([baslik, satirlar]) => {
+                            Object.entries(hikayeGruplari)
+                              .sort(([, aRows], [, bRows]) => {
+                                const aMax = aRows.reduce((m, a) => (a.tarih > m ? a.tarih : m), "");
+                                const bMax = bRows.reduce((m, a) => (a.tarih > m ? a.tarih : m), "");
+                                return bMax.localeCompare(aMax);
+                              })
+                              .map(([baslik, satirlar]) => {
                               const hikayeAcik  = seciliHikayeBaslik === baslik;
                               const oQuiz       = satirlar.filter(a => a.aksiyon === "quiz_cevaplandi");
                               const bosluklar   = satirlar.filter(a => a.aksiyon === "bosluk_dolduruldu");
