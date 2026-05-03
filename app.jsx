@@ -1110,7 +1110,7 @@ try {
                         </button>
                         <button
                           onClick={() => {
-                            navigator.clipboard.writeText(`Hikaye Kodu: ${entry.kod}\nSite: ${window.location.origin}`);
+                            navigator.clipboard.writeText(`Hikayeyi açmak için tıkla:\n${window.location.origin}?kod=${entry.kod}`);
                             alert("Mesaj kopyalandı!");
                           }}
                           className="bg-gray-100 text-gray-600 px-3 py-1 rounded-lg font-bold text-xs hover:bg-gray-200 transition-colors"
