@@ -2,6 +2,20 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const GEMINI_KEY   = process.env.GEMINI_KEY;
 
+function mapTeacherLibraryRow(row) {
+  if (!row) return row;
+  return {
+    ...row,
+    title: row.baslik,
+    topic: row.konu,
+    level: row.seviye,
+    lang: row.dil,
+    voice: row.ses_tonu,
+    speed: row.hiz,
+    created_at: row.olusturma_tarihi,
+  };
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -130,7 +144,7 @@ export default async function handler(req, res) {
           "Content-Type": "application/json",
           "apikey": SUPABASE_KEY,
           "Authorization": `Bearer ${SUPABASE_KEY}`,
-          "Prefer": "return=minimal"
+          "Prefer": "return=representation"
         },
         body: JSON.stringify(payload)
       });
@@ -138,7 +152,8 @@ export default async function handler(req, res) {
         const err = await response.text();
         return res.status(response.status).json({ error: err });
       }
-      return res.status(200).json({ ok: true });
+      const data = await response.json();
+      return res.status(200).json(mapTeacherLibraryRow(data[0]));
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -148,7 +163,7 @@ export default async function handler(req, res) {
   if (model === "kutuphane-list") {
     try {
       const response = await fetch(
-        `${SUPABASE_URL}/rest/v1/paylasilan_hikayeler?select=id,kod,title,level,lang,created_at,bitis_tarihi&order=created_at.desc`,
+        `${SUPABASE_URL}/rest/v1/ogretmen_kutuphanesi?select=*&order=olusturma_tarihi.desc`,
         {
           headers: {
             "apikey": SUPABASE_KEY,
@@ -157,7 +172,7 @@ export default async function handler(req, res) {
         }
       );
       const data = await response.json();
-      return res.status(200).json(data);
+      return res.status(200).json((data || []).map(mapTeacherLibraryRow));
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }
@@ -167,7 +182,7 @@ export default async function handler(req, res) {
   if (model === "kutuphane-delete") {
     try {
       const response = await fetch(
-        `${SUPABASE_URL}/rest/v1/paylasilan_hikayeler?id=eq.${payload.id}`,
+        `${SUPABASE_URL}/rest/v1/ogretmen_kutuphanesi?id=eq.${payload.id}`,
         {
           method: "DELETE",
           headers: {
