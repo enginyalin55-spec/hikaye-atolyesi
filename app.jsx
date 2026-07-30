@@ -54,20 +54,6 @@ async function supabaseGet(kod) {
   return res.json();
 }
 
-function mapTeacherLibraryEntry(entry) {
-  if (!entry) return entry;
-  return {
-    ...entry,
-    title: entry.title || entry.baslik || "",
-    level: entry.level || entry.seviye || "",
-    lang: entry.lang || entry.dil || "",
-    voice: entry.voice || entry.ses_tonu || "Kore",
-    speed: entry.speed || entry.hiz || "normal",
-    topic: entry.topic || entry.konu || "",
-    created_at: entry.created_at || entry.olusturma_tarihi || null,
-  };
-}
-
 function generateKod() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let kod = "HK-";
@@ -335,7 +321,6 @@ function App() {
   const [shareKod, setShareKod] = useState(null);
   const [shareProgress, setShareProgress] = useState("");
   const [showShareModal, setShowShareModal] = useState(false);
-  const [currentLibraryEntryId, setCurrentLibraryEntryId] = useState(null);
   const [isStudentMode, setIsStudentMode] = useState(false);
   const [girisEkrani, setGirisEkrani] = useState(true);
   const [girisInput, setGirisInput] = useState("");
@@ -369,7 +354,8 @@ function App() {
         const data = await res.json();
         setLibrary(data || []);
       } catch {
-        setLibrary([]);
+        const saved = localStorage.getItem("hikaye_kutuphanesi");
+        if (saved) setLibrary(JSON.parse(saved));
       }
     };
     yukle();
@@ -387,7 +373,6 @@ function App() {
   const handleGenerate = async () => {
     if (!topic.trim()) return;
     setError(null);
-    setCurrentLibraryEntryId(null);
     setStatus("generating-text");
 
     try {
@@ -411,33 +396,27 @@ function App() {
         setStoryData(prev => ({ ...prev, pages: [...updatedPages] }));
       }
 
-      const fullStoryData = { ...story, pages: updatedPages };
-      setStoryData(fullStoryData);
-
-      const saveRes = await fetch("/api/proxy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "kutuphane-save",
-          payload: {
-            baslik: story.title,
-            konu: topic,
-            seviye: level,
-            dil: lang,
-            ses_tonu: voice,
-            hiz: speed,
-            data: fullStoryData
-          }
-        }),
-      });
-
-      if (!saveRes.ok) {
-        throw new Error("Öğretmen kütüphanesine kayıt başarısız oldu.");
+      setStoryData(prev => ({ ...prev, pages: updatedPages }));
+      // Otomatik kütüphane kaydı
+try {
+  await fetch("/api/proxy", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "kutuphane-save",
+      payload: {
+        baslik: story.title,
+        konu: topic,
+        seviye: level,
+        dil: lang,
+        ses_tonu: voice,
+        hiz: speed
       }
-
-      const savedEntry = mapTeacherLibraryEntry(await saveRes.json());
-      setLibrary(prev => [savedEntry, ...prev.filter(item => item.id !== savedEntry.id)]);
-      setCurrentLibraryEntryId(savedEntry.id);
+    }),
+  });
+} catch {
+  // kaydedilemese de devam et
+}
       setStatus("preview");
     } catch (err) {
       setError(err.message || "Bir hata oluştu. Lütfen tekrar deneyin.");
@@ -446,41 +425,23 @@ function App() {
   };
 
   // ── Kütüphaneye kaydet ──
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!storyData) return;
-    if (currentLibraryEntryId) {
-      alert("Bu hikaye zaten öğretmen kütüphanesine kaydedildi.");
-      return;
-    }
-    try {
-      const saveRes = await fetch("/api/proxy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "kutuphane-save",
-          payload: {
-            baslik: storyData.title,
-            konu: topic,
-            seviye: level,
-            dil: lang,
-            ses_tonu: voice,
-            hiz: speed,
-            data: storyData
-          }
-        }),
-      });
-
-      if (!saveRes.ok) {
-        throw new Error("Öğretmen kütüphanesine kayıt başarısız oldu.");
-      }
-
-      const savedEntry = mapTeacherLibraryEntry(await saveRes.json());
-      setLibrary(prev => [savedEntry, ...prev.filter(item => item.id !== savedEntry.id)]);
-      setCurrentLibraryEntryId(savedEntry.id);
-      alert("✅ Hikaye öğretmen kütüphanesine kaydedildi!");
-    } catch (err) {
-      alert(err.message || "Hikaye öğretmen kütüphanesine kaydedilemedi.");
-    }
+    const entry = {
+      id: Date.now(),
+      title: storyData.title,
+      level,
+      lang,
+      topic,
+      date: new Date().toLocaleDateString("tr-TR"),
+      data: storyData,
+      voice,
+      speed,
+    };
+    const updated = [entry, ...library];
+    setLibrary(updated);
+    localStorage.setItem("hikaye_kutuphanesi", JSON.stringify(updated));
+    alert("✅ Hikaye kütüphaneye kaydedildi!");
   };
 
   // ── Kütüphaneden sil ──
@@ -499,18 +460,20 @@ function App() {
 
   // ── Kütüphaneden aç ──
   const handleOpen = async (entry) => {
-    const fullEntry = mapTeacherLibraryEntry(entry);
-    if (!fullEntry.data) {
-      alert("Bu kütüphane kaydında hikaye verisi bulunamadı. Lütfen hikayeyi yeniden oluşturup tekrar kaydedin.");
-      return;
+    let fullEntry = entry;
+    if (!entry.data && entry.kod) {
+      try {
+        fullEntry = await supabaseGet(entry.kod);
+      } catch {
+        alert("Hikaye verisi yüklenemedi.");
+        return;
+      }
     }
     setStoryData(fullEntry.data);
-    setLevel(fullEntry.level);
-    setLang(fullEntry.lang);
-    setVoice(fullEntry.voice);
-    setSpeed(fullEntry.speed);
-    setTopic(fullEntry.topic || "");
-    setCurrentLibraryEntryId(fullEntry.id || null);
+    setLevel(fullEntry.level || fullEntry.seviye);
+    setLang(fullEntry.lang || fullEntry.dil);
+    setVoice(fullEntry.voice || fullEntry.ses_tonu || "Kore");
+    setSpeed(fullEntry.speed || fullEntry.hiz || "normal");
     setStatus("preview");
     setIsStudentMode(false);
   };
@@ -1194,7 +1157,6 @@ function App() {
       setStatus("idle"); 
       setShareStatus("idle"); 
       setShareKod(null); 
-      setCurrentLibraryEntryId(null);
     } 
   }}
   className="bg-gray-100 text-gray-600 px-4 py-2 rounded-xl font-bold text-sm"
