@@ -159,6 +159,30 @@ export default async function handler(req, res) {
     }
   }
 
+  if (model === "ogretmen-kutuphane-eslesen-hikaye-getir") {
+    try {
+      const baslik = encodeURIComponent(payload.baslik || "");
+      const seviye = encodeURIComponent(payload.seviye || "");
+      const dil = encodeURIComponent(payload.dil || "");
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/paylasilan_hikayeler?title=eq.${baslik}&level=eq.${seviye}&lang=eq.${dil}&data=not.is.null&select=*&order=created_at.desc&limit=1`,
+        {
+          headers: {
+            "apikey": SUPABASE_KEY,
+            "Authorization": `Bearer ${SUPABASE_KEY}`
+          }
+        }
+      );
+      const data = await response.json();
+      if (!data || data.length === 0) {
+        return res.status(404).json({ error: "Hikaye bulunamadı." });
+      }
+      return res.status(200).json(data[0]);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   // ── Kütüphane: Listele ──────────────────
   if (model === "kutuphane-list") {
     try {
@@ -173,6 +197,24 @@ export default async function handler(req, res) {
       );
       const data = await response.json();
       return res.status(200).json((data || []).map(mapTeacherLibraryRow));
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  if (model === "istatistik-hikaye-list") {
+    try {
+      const response = await fetch(
+        `${SUPABASE_URL}/rest/v1/paylasilan_hikayeler?select=id,kod,title,level,lang,created_at,bitis_tarihi,data&order=created_at.desc`,
+        {
+          headers: {
+            "apikey": SUPABASE_KEY,
+            "Authorization": `Bearer ${SUPABASE_KEY}`
+          }
+        }
+      );
+      const data = await response.json();
+      return res.status(200).json(data || []);
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }

@@ -54,6 +54,19 @@ async function supabaseGet(kod) {
   return res.json();
 }
 
+async function supabaseGetTeacherLibraryMatch({ baslik, seviye, dil }) {
+  const res = await fetch("/api/proxy", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "ogretmen-kutuphane-eslesen-hikaye-getir",
+      payload: { baslik, seviye, dil }
+    }),
+  });
+  if (!res.ok) throw new Error("Hikaye bulunamadı.");
+  return res.json();
+}
+
 function mapTeacherLibraryEntry(entry) {
   if (!entry) return entry;
   return {
@@ -501,8 +514,17 @@ function App() {
   const handleOpen = async (entry) => {
     const fullEntry = mapTeacherLibraryEntry(entry);
     if (!fullEntry.data) {
-      alert("Bu kütüphane kaydında hikaye verisi bulunamadı. Lütfen hikayeyi yeniden oluşturup tekrar kaydedin.");
-      return;
+      try {
+        const matchedEntry = await supabaseGetTeacherLibraryMatch({
+          baslik: fullEntry.baslik || fullEntry.title,
+          seviye: fullEntry.seviye || fullEntry.level,
+          dil: fullEntry.dil || fullEntry.lang,
+        });
+        fullEntry.data = matchedEntry.data;
+      } catch {
+        alert("Bu kütüphane kaydında hikaye verisi bulunamadı. Lütfen hikayeyi yeniden oluşturup tekrar kaydedin.");
+        return;
+      }
     }
     setStoryData(fullEntry.data);
     setLevel(fullEntry.level);
@@ -1074,7 +1096,7 @@ function App() {
                     className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-3"
                   >
                     {/* Üst satır: bilgi + butonlar */}
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                       <div className="flex-1 min-w-0">
                         <p className="font-black text-gray-900 truncate">{entry.title || entry.baslik}</p>
                         <p className="text-xs text-gray-400 font-medium mt-1">
@@ -1083,16 +1105,16 @@ function App() {
                         </p>
                         <p className="text-xs text-gray-500 mt-1 truncate italic">{entry.topic || entry.konu}</p>
                       </div>
-                      <div className="flex gap-2 flex-shrink-0">
+                      <div className="flex w-full gap-2 sm:w-auto sm:flex-shrink-0">
                         <button
                           onClick={() => handleOpen(entry)}
-                          className="bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-xs"
+                          className="flex-1 bg-indigo-600 text-white px-4 py-2 rounded-xl font-bold text-xs sm:flex-none"
                         >
                           📂 Aç
                         </button>
                         <button
                           onClick={() => handleDelete(entry.id)}
-                          className="bg-red-50 text-red-500 border border-red-100 px-3 py-2 rounded-xl font-bold text-xs"
+                          className="flex-1 bg-red-50 text-red-500 border border-red-100 px-3 py-2 rounded-xl font-bold text-xs sm:flex-none"
                         >
                           🗑️
                         </button>
@@ -2575,7 +2597,7 @@ function IstatistikSayfasi() {
         const res = await fetch("/api/proxy", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ model: "kutuphane-list", payload: {} }),
+          body: JSON.stringify({ model: "istatistik-hikaye-list", payload: {} }),
         });
         const data = await res.json();
         setHikayeler(data || []);
